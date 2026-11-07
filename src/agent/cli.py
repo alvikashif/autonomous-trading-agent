@@ -153,6 +153,31 @@ def cmd_paper_run(args, cfg) -> None:
     print(f"paper state saved -> {args.state}")
 
 
+def cmd_swing_backtest(args, cfg) -> None:
+    from .swing import SwingParams, run_swing
+
+    elig = _eligible_report(cfg.universe.screen_report_csv)
+    symbols = elig["symbol"].tolist()
+    prices = fetch_prices(symbols, args.start, cache_path=cfg.universe.prices_cache_csv)
+    p = SwingParams(target_pct=args.target, stop_pct=args.stop, max_hold_days=args.hold,
+                    max_positions=args.positions, capital=args.capital)
+    res = run_swing(prices, symbols, p, cfg.costs, "breakout", start=args.start)
+    s = res.summary()
+    print(f"rule: 20d breakout + above 50d avg, +{p.target_pct:.0%} target / -{p.stop_pct:.0%} stop / {p.max_hold_days}d max, {p.max_positions} slots, start Rs {p.capital:,.0f}")
+    print(f"breakout : trades {s['n']}  win {s['win_rate']:.0%}  avg net/trade {s['avg_net_pct']:.2%}  "
+          f"total net {s['total_net']:,.0f}  costs {s['total_costs']:,.0f}  final {s['final']:,.0f}")
+    if not res.trades.empty:
+        print(res.trades.groupby("reason").agg(n=("net", "size"), avg_net_pct=("net_pct", "mean")).round(4).to_string())
+    finals, nets = [], []
+    for seed in range(args.seeds):
+        r = run_swing(prices, symbols, p, cfg.costs, "random", seed=seed, start=args.start).summary()
+        finals.append(r["final"]); nets.append(r["avg_net_pct"])
+    import numpy as np
+    print(f"random   : {args.seeds} seeds, same exits  avg net/trade {np.mean(nets):.2%}  final median {np.median(finals):,.0f} "
+          f"(10th-90th pct {np.percentile(finals, 10):,.0f} - {np.percentile(finals, 90):,.0f})")
+    print("If breakout is not clearly above the random band, the entry signal adds nothing. Survivorship bias applies.")
+
+
 def cmd_monitor(args, cfg) -> None:
     from .monitor import run_forever, run_once
 
@@ -191,6 +216,14 @@ def main(argv: list[str] | None = None) -> None:
     b = sub.add_parser("backtest", help="Backtest the strategy")
     b.add_argument("--start", default="2019-01-01")
     b.add_argument("--window", action="append", help="extra report window START:END, e.g. 2023-01-01:  (repeatable)")
+    sw = sub.add_parser("swing-backtest", help="Backtest the short-term paper rule vs a random-entry baseline")
+    sw.add_argument("--start", default="2019-01-01")
+    sw.add_argument("--target", type=float, default=0.08)
+    sw.add_argument("--stop", type=float, default=0.04)
+    sw.add_argument("--hold", type=int, default=10)
+    sw.add_argument("--positions", type=int, default=2)
+    sw.add_argument("--capital", type=float, default=5000.0)
+    sw.add_argument("--seeds", type=int, default=20)
     mo = sub.add_parser("monitor", help="Watch holdings during NSE hours (paper), alert / enforce stop")
     mo.add_argument("--once", action="store_true", help="single check then exit")
     mo.add_argument("--alert-only", action="store_true", help="never sell, even if a stop is configured")
@@ -212,6 +245,7 @@ def main(argv: list[str] | None = None) -> None:
         "screen": cmd_screen,
         "backtest": cmd_backtest,
         "paper-run": cmd_paper_run,
+        "swing-backtest": cmd_swing_backtest,
         "monitor": cmd_monitor,
         "dashboard": cmd_dashboard,
     }[args.cmd](args, cfg)
