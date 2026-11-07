@@ -1,0 +1,52 @@
+# All values here override the defaults in src/agent/config.py
+
+universe:
+  nse_list_csv: data/nifty500.csv           # plain Nifty 500 list; the agent's own screen does the Shariah filtering
+  fundamentals_csv: data/fundamentals.csv   # see data/fundamentals_template.csv
+  screen_report_csv: data/screen_report.csv # written by `agent screen`
+  prices_cache_csv: data/prices_cache.csv
+  excluded_symbols: []                      # manual blocklist (e.g. ITC for tobacco)
+
+shariah:                                    # AAOIFI-style ratios, confirm with your scholar
+  max_debt_to_mcap: 0.33
+  max_cash_to_mcap: 0.33
+  max_interest_income_ratio: 0.05
+
+strategy:
+  # Default chosen after backtests (see README): equal-weight the 20 largest Shariah-eligible
+  # stocks by market cap, rebalance quarterly. Cheapest to run and smallest drawdown tested.
+  # Momentum is still available with `mode: momentum`.
+  mode: size
+  top_n: 20                                 # upper limit; actual N scales with portfolio size
+  scale_top_n: true                         # small portfolio = fewer, affordable names (never below min_names)
+  min_names: 5
+  min_position_value: 1500                  # N grows by one for each Rs 1500 of portfolio, up to top_n
+  momentum_lookback_days: 126
+  momentum_skip_days: 21
+  use_trend_filter: false                   # true = go to cash when benchmark < 200d average (may realise taxable gains)
+  trend_window_days: 200
+  min_roe: -10                              # ROE filter effectively off; stocks with NO ROE data are still skipped
+  benchmark: "^NSEI"
+
+risk:
+  max_position_pct: 0.20
+  max_sector_pct: 0.35
+  daily_loss_limit_pct: 0.03
+
+portfolio:
+  monthly_contribution: 5000
+  min_trade_value: 500                      # skip tiny rebalance trades, fees dominate
+  cash_buffer_pct: 0.01                     # keep 1% to cover costs
+  rebalance_months: 3                       # trade quarterly; monthly contributions wait as cash
+
+costs:                                      # approximate Groww delivery charges, verify against current schedule
+  brokerage_flat: 20.0
+  brokerage_pct: 0.001
+  brokerage_min: 5.0
+  stt_pct: 0.001
+  exchange_pct: 0.0000297
+  sebi_pct: 0.000001
+  stamp_buy_pct: 0.00015
+  gst_pct: 0.18
+  dp_charge_sell: 16.5
+  slippage_pct: 0.001

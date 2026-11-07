@@ -1,0 +1,6 @@
+# Pipeline smoke test only. Universe is an UNVERIFIED list, never trade from this.
+universe:
+  nse_list_csv: data/seed_unverified.csv
+  fundamentals_csv: data/fundamentals_seed.csv
+  screen_report_csv: data/screen_report_seed.csv
+  prices_cache_csv: data/prices_cache_seed.csv
