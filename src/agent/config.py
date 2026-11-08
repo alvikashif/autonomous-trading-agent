@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 
@@ -20,6 +21,7 @@ class UniverseConfig:
     paper_state_json: str = "data/paper_state.json"
     monitor_status_json: str = "data/monitor_status.json"
     swing_status_json: str = "data/swing_status.json"
+    kill_switch_json: str = "data/kill_switch.json"
     excluded_symbols: tuple[str, ...] = ()
 
 
@@ -48,6 +50,20 @@ class SwingConfig:
 
 
 @dataclass(frozen=True)
+class BrokerConfig:
+    mode: str = "paper"  # "paper" or "live"
+    api_key: str = ""
+    totp_secret: str = ""
+    token_cache_path: str = "data/groww_token.json"
+
+    def resolved_api_key(self) -> str:
+        return os.environ.get("GROWW_API_KEY", "").strip() or self.api_key.strip()
+
+    def resolved_totp_secret(self) -> str:
+        return os.environ.get("GROWW_TOTP_SECRET", "").strip() or self.totp_secret.strip()
+
+
+@dataclass(frozen=True)
 class Config:
     universe: UniverseConfig = field(default_factory=UniverseConfig)
     shariah: Thresholds = field(default_factory=Thresholds)
@@ -56,6 +72,7 @@ class Config:
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     costs: CostConfig = field(default_factory=CostConfig)
     swing: SwingConfig = field(default_factory=SwingConfig)
+    broker: BrokerConfig = field(default_factory=BrokerConfig)
 
 
 def _build(cls, raw: dict):

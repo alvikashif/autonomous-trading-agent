@@ -30,8 +30,12 @@ def check_orders(
     limits: RiskLimits,
     cost_cfg: CostConfig,
     day_pnl_pct: float = 0.0,
+    kill_switch_active: bool = False,
 ) -> tuple[list[Order], list[tuple[Order, str]]]:
     """Return (approved, rejected_with_reason). Sells are processed first."""
+    if kill_switch_active:
+        return [], [(o, "kill switch is active, trading halted") for o in orders]
+
     approved: list[Order] = []
     rejected: list[tuple[Order, str]] = []
     pos = dict(positions)

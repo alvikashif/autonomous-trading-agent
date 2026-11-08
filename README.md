@@ -1,7 +1,7 @@
-# Shariah trading agent (NSE, paper-first)
+# Shariah trading agent (NSE, paper-first, Groww live-ready)
 
-Delivery-only. No margin/MTF, no shorting, no F&O. No live broker is implemented:
-`GrowwBroker` is a deliberate stub. Everything runs on paper until you decide otherwise.
+Delivery-only. No margin/MTF, no shorting, no F&O. Runs on paper by default, with an official
+Groww API adapter (`GrowwBroker`) featuring automated daily TOTP token refresh for live execution.
 
 ## Setup
 ```
@@ -26,6 +26,12 @@ agent paper-run --dry-run         # show what a monthly rebalance would do
 agent paper-run --deposit         # run monthly: deposits once per calendar month, trades only when a
                                   # quarterly rebalance is due (state tracks deposits and last rebalance);
                                   # --force-deposit / --force-rebalance override the guards
+agent groww-status                # verify Groww API authentication, test TOTP login, show CNC cash & holdings
+agent live-run --dry-run          # plan quarterly rebalance on live Groww account without placing trades
+agent live-run                    # execute quarterly rebalance live on Groww (delivery CNC only, with confirmation)
+agent kill-switch --trigger       # immediately halt all trading actions and orders (circuit breaker)
+agent kill-switch --reset         # resume normal operations
+agent kill-switch --status        # check circuit breaker status
 ```
 
 ## Default strategy (chosen from backtests)
@@ -66,6 +72,16 @@ dashboard shows it in its own panel. The jobs container runs it daily after `pap
 - Trend filter can move to cash and realise taxable gains; set `use_trend_filter: false` to disable.
 - Shariah ratios are a mechanical filter, not a ruling. Confirm with your scholar.
 
-## Before going live
-Paper-trade 1-3 months, confirm Groww API terms (static IP, limits, token refresh),
-implement `GrowwBroker` forcing product=CNC, start with a tiny amount.
+## How Groww API Daily 6:00 AM Reset Works (Autonomous Trading)
+SEBI regulations mandate Indian brokers invalidate access tokens daily around 06:00 AM IST.
+`GrowwBroker` solves this autonomously without human morning logins:
+1. It compares the cached token timestamp in `data/groww_token.json` against the latest 6:00 AM IST reset window.
+2. If stale or expired, it automatically generates a fresh 6-digit TOTP code using `pyotp` and your TOTP secret seed.
+3. It fetches a new 24-hour token via `GrowwAPI.get_access_token()` and caches it.
+4. If an unexpected 401 error occurs mid-session, it automatically re-authenticates and retries.
+5. All live orders strictly force `product=CNC` (cash & carry delivery on NSE) for 100% Shariah compliance (no margin, no shorting, no intraday).
+
+## Emergency Kill Switch
+You can halt all trading instantly in two ways:
+- **CLI**: `agent kill-switch --trigger --reason "Market halt"` (disengage with `agent kill-switch --reset`)
+- **Dashboard**: Click the red `EMERGENCY KILL SWITCH` button on the top right. When active, all buy orders and rebalances are blocked, and a red alert banner appears on the dashboard.

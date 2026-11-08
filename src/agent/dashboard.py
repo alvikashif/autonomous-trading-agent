@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from .kill_switch import get_kill_switch_status, reset_kill_switch, trigger_kill_switch
+
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -52,7 +54,8 @@ def _last_closes(prices_cache: str, symbols: list[str]) -> dict[str, float]:
 
 
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
-                  rebalance_months: int, swing_path: str | None = None) -> dict:
+                  rebalance_months: int, swing_path: str | None = None,
+                  kill_switch_path: str | None = None, broker_mode: str = "paper") -> dict:
     state = _read_json(paper_path)
     mon = _read_json(monitor_path)
     positions: dict[str, int] = {k: int(v) for k, v in state.get("positions", {}).items() if int(v) > 0}
@@ -87,8 +90,10 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         screen = {"compliant": int(rep["compliant"].sum()), "total": int(len(rep))}
     except (OSError, ValueError, KeyError):
         pass
+    mode_text = "LIVE (Groww API, CNC delivery)" if broker_mode == "live" else "PAPER (simulated, no real orders)"
     return {
-        "mode": "PAPER (simulated, no real orders)",
+        "mode": mode_text,
+        "broker_mode": broker_mode,
         "equity": equity, "cash": cash, "held_value": held_value,
         "deposited": deposited,
         "pnl": equity - deposited if deposited else None,
@@ -104,6 +109,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         },
         "screen": screen,
         "swing": _read_json(swing_path) if swing_path else {},
+        "kill_switch": get_kill_switch_status(kill_switch_path or "data/kill_switch.json"),
     }
 
 
@@ -127,7 +133,21 @@ th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:6
 </style></head><body>
 <div class="banner" id="mode">PAPER</div>
 <div class="wrap">
-<h1>Shariah Trading Agent</h1><div class="mute" id="sub">loading…</div>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin:16px 0 4px">
+  <div>
+    <h1 style="margin:0 0 4px">Shariah Trading Agent</h1>
+    <div class="mute" id="sub">loading…</div>
+  </div>
+  <div>
+    <button id="btn-kill" onclick="triggerKill()" style="background:#c0262d;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:600;font-size:12px;cursor:pointer">EMERGENCY KILL SWITCH</button>
+  </div>
+</div>
+<div id="killbanner" style="display:none;background:#fde8e8;border:1px solid #f87171;color:#9b1c1c;padding:12px 16px;border-radius:8px;margin:12px 0;font-weight:600">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>⚠️ EMERGENCY HALT ACTIVE: All trading is stopped! <span id="killreason" style="font-weight:normal;font-size:13px"></span></div>
+    <button onclick="resetKill()" style="background:#0a7d3e;color:#fff;border:none;border-radius:4px;padding:6px 12px;font-weight:600;font-size:12px;cursor:pointer">Resume Trading</button>
+  </div>
+</div>
 <div class="grid" id="kpis"></div>
 <div class="card"><h2>Monitor</h2><div id="mon"></div></div>
 <div class="card"><h2>Holdings</h2><table id="hold"></table></div>
@@ -145,9 +165,31 @@ const cls=n=>n==null?'':(n>=0?'up':'down');
 function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
 function row(cells,head){const tr=el('tr');cells.forEach(c=>{const td=el(head?'th':'td',c.c||'',c.t);tr.appendChild(td)});return tr}
 function fill(id,rows){const t=document.getElementById(id);t.replaceChildren(...rows)}
+async function triggerKill(){
+ if(!confirm('EMERGENCY: Halt all trading and activate Kill Switch?'))return;
+ try{const r=await fetch('/api/kill-switch/trigger',{method:'POST'});if(r.ok)load();else alert('Failed: HTTP '+r.status)}catch(e){alert('Network error: '+e)}
+}
+async function resetKill(){
+ if(!confirm('RESUME: Disengage Kill Switch and restore trading?'))return;
+ try{const r=await fetch('/api/kill-switch/reset',{method:'POST'});if(r.ok)load();else alert('Failed: HTTP '+r.status)}catch(e){alert('Network error: '+e)}
+}
 async function load(){
  let d;try{const r=await fetch('/api/summary',{cache:'no-store'});d=await r.json()}catch(e){document.getElementById('sub').textContent='cannot reach server';return}
- document.getElementById('mode').textContent=d.mode;
+ const ks=d.kill_switch||{};
+ const kb=document.getElementById('killbanner');
+ const bk=document.getElementById('btn-kill');
+ if(ks.active){
+  kb.style.display='block';
+  bk.style.display='none';
+  document.getElementById('killreason').textContent=ks.reason?('('+ks.reason+')'):'';
+  document.getElementById('mode').textContent='EMERGENCY HALT (TRADING KILLED)';
+  document.getElementById('mode').style.background='var(--down)';
+ } else {
+  kb.style.display='none';
+  bk.style.display='inline-block';
+  document.getElementById('mode').textContent=d.mode;
+  document.getElementById('mode').style.background='var(--bar)';
+ }
  document.getElementById('sub').textContent='Updated '+new Date().toLocaleTimeString()+(d.screen.total?` · ${d.screen.compliant} of ${d.screen.total} stocks pass the Shariah screen`:'');
  const k=document.getElementById('kpis');k.replaceChildren();
  [['Equity',inr(d.equity),''],['Cash',inr(d.cash),''],['Deposited',inr(d.deposited),''],
@@ -217,8 +259,13 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
                 return self._deny(401, "login required", {"WWW-Authenticate": 'Basic realm="agent"'})
             path = self.path.split("?")[0]
             if path == "/api/summary":
-                data = json.dumps(build_summary(paths["paper"], paths["monitor"], paths["screen"],
-                                                paths["prices"], cfg.portfolio.rebalance_months, paths.get("swing"))).encode()
+                ks_path = paths.get("kill_switch", "data/kill_switch.json")
+                broker_mode = getattr(getattr(cfg, "broker", None), "mode", "paper")
+                data = json.dumps(build_summary(
+                    paths["paper"], paths["monitor"], paths["screen"],
+                    paths["prices"], cfg.portfolio.rebalance_months, paths.get("swing"),
+                    kill_switch_path=ks_path, broker_mode=broker_mode,
+                )).encode()
                 ctype = "application/json"
             elif path in ("/", "/index.html"):
                 data, ctype = PAGE.encode(), "text/html; charset=utf-8"
@@ -235,7 +282,31 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
             self.wfile.write(data)
 
         def do_POST(self):
-            self._deny(405, "read-only dashboard")
+            host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+            if host not in allowed_hosts:
+                return self._deny(403, "forbidden host")
+            if not self._authorized():
+                return self._deny(401, "login required", {"WWW-Authenticate": 'Basic realm="agent"'})
+            path = self.path.split("?")[0]
+            ks_path = paths.get("kill_switch", "data/kill_switch.json")
+            if path == "/api/kill-switch/trigger":
+                status = trigger_kill_switch("Manual emergency halt from dashboard", ks_path)
+                data = json.dumps(status).encode()
+            elif path == "/api/kill-switch/reset":
+                status = reset_kill_switch(ks_path)
+                data = json.dumps(status).encode()
+            else:
+                return self._deny(405, "read-only endpoint or unknown action")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
+            self.end_headers()
+            self.wfile.write(data)
 
         do_PUT = do_DELETE = do_PATCH = do_POST
 

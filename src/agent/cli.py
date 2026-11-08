@@ -104,6 +104,12 @@ def cmd_backtest(args, cfg) -> None:
 
 
 def cmd_paper_run(args, cfg) -> None:
+    from .kill_switch import is_kill_switch_active
+
+    if is_kill_switch_active(cfg.universe.kill_switch_json):
+        print("Trading halted: Kill switch is currently ACTIVE! Disengage with `agent kill-switch --reset` or via dashboard.")
+        return
+
     elig = _eligible_report(cfg.universe.screen_report_csv)
     symbols = elig["symbol"].tolist()
     sectors = dict(zip(elig["symbol"], elig["industry"].fillna("")))
@@ -232,10 +238,126 @@ def cmd_monitor(args, cfg) -> None:
 def cmd_dashboard(args, cfg) -> None:
     from .dashboard import serve
 
-    paths = {"paper": cfg.universe.paper_state_json, "monitor": cfg.universe.monitor_status_json,
-             "screen": cfg.universe.screen_report_csv, "prices": cfg.universe.prices_cache_csv,
-             "swing": cfg.universe.swing_status_json}
+    paths = {
+        "paper": cfg.universe.paper_state_json,
+        "monitor": cfg.universe.monitor_status_json,
+        "screen": cfg.universe.screen_report_csv,
+        "prices": cfg.universe.prices_cache_csv,
+        "swing": cfg.universe.swing_status_json,
+        "kill_switch": cfg.universe.kill_switch_json,
+    }
     serve(cfg, paths, host=args.host, port=args.port, extra_hosts=tuple(args.allow_host or ()))
+
+
+def cmd_kill_switch(args, cfg) -> None:
+    from .kill_switch import get_kill_switch_status, reset_kill_switch, trigger_kill_switch
+
+    path = cfg.universe.kill_switch_json
+    if args.trigger:
+        reason = args.reason or "CLI manual trigger"
+        res = trigger_kill_switch(reason=reason, path=path)
+        print(f"KILL SWITCH ENGAGED! Reason: {res['reason']}")
+    elif args.reset:
+        res = reset_kill_switch(path=path)
+        print("KILL SWITCH DISENGAGED. Normal operations restored.")
+    else:
+        st = get_kill_switch_status(path=path)
+        status_str = "ACTIVE (HALTED)" if st["active"] else "INACTIVE (NORMAL)"
+        print(f"Kill switch status: {status_str}")
+        if st["active"]:
+            print(f"  Reason: {st.get('reason')}")
+            print(f"  Triggered at: {st.get('triggered_at')}")
+
+
+def cmd_groww_status(args, cfg) -> None:
+    from .broker import GrowwBroker
+
+    b_cfg = cfg.broker
+    api_key = b_cfg.resolved_api_key()
+    totp_secret = b_cfg.resolved_totp_secret()
+    if not api_key or not totp_secret:
+        raise SystemExit(
+            "Missing Groww credentials. Set broker.api_key & broker.totp_secret in config.yaml "
+            "or export GROWW_API_KEY and GROWW_TOTP_SECRET."
+        )
+
+    print("Connecting to Groww API with automatic daily TOTP generation...")
+    broker = GrowwBroker(api_key=api_key, totp_secret=totp_secret, token_cache_path=b_cfg.token_cache_path)
+    broker.authenticate(force=args.force)
+    print(f"Authentication verified! (Token cached at {b_cfg.token_cache_path})")
+    cash = broker.cash()
+    pos = broker.positions()
+    print(f"Available CNC Balance: Rs {cash:,.2f}")
+    print(f"Demat Holdings ({len(pos)} symbols):", pos if pos else "none")
+
+
+def cmd_live_run(args, cfg) -> None:
+    from .broker import GrowwBroker
+    from .kill_switch import is_kill_switch_active
+
+    if is_kill_switch_active(cfg.universe.kill_switch_json):
+        raise SystemExit("Trading halted: Kill switch is currently ACTIVE! Disengage with `agent kill-switch --reset` or via dashboard.")
+
+    b_cfg = cfg.broker
+    api_key = b_cfg.resolved_api_key()
+    totp_secret = b_cfg.resolved_totp_secret()
+    if not api_key or not totp_secret:
+        raise SystemExit(
+            "Missing Groww credentials. Set broker.api_key & broker.totp_secret in config.yaml "
+            "or export GROWW_API_KEY and GROWW_TOTP_SECRET."
+        )
+
+    broker = GrowwBroker(api_key=api_key, totp_secret=totp_secret, token_cache_path=b_cfg.token_cache_path)
+    broker.authenticate()
+
+    elig = _eligible_report(cfg.universe.screen_report_csv)
+    symbols = elig["symbol"].tolist()
+    sectors = dict(zip(elig["symbol"], elig["industry"].fillna("")))
+    start = (date.today() - timedelta(days=500)).isoformat()
+    prices = fetch_prices(symbols + [cfg.strategy.benchmark], start, cache_path=cfg.universe.prices_cache_csv, refresh=True)
+    bench = prices[cfg.strategy.benchmark]
+    stocks = prices.drop(columns=[cfg.strategy.benchmark]).ffill()
+    asof = stocks.index[-1]
+    px = stocks.iloc[-1].dropna().to_dict()
+
+    live_cash = broker.cash()
+    live_pos = broker.positions()
+    equity = live_cash + sum(live_pos.get(s, 0) * px.get(s, 0.0) for s in live_pos)
+
+    today = str(asof.date())
+    print(f"LIVE Groww: as of {today}  equity Rs {equity:,.0f}  cash Rs {live_cash:,.0f}  holdings: {live_pos}")
+
+    targets = target_weights(stocks, bench, asof, symbols, cfg.strategy, cfg.risk.max_position_pct, _quality(cfg), _size(cfg),
+                            equity=equity, held=live_pos.keys())
+    orders = plan_orders(targets, live_pos, px, equity, cfg.portfolio.min_trade_value, cfg.portfolio.cash_buffer_pct)
+    approved, rejected = check_orders(orders, live_cash, live_pos, px, sectors, equity, cfg.risk, cfg.costs,
+                                      kill_switch_active=is_kill_switch_active(cfg.universe.kill_switch_json))
+
+    print(f"Orders planned: {len(approved)} approved, {len(rejected)} rejected:")
+    for o in approved:
+        print(f"  APPROVE {o.side.value} {o.qty} {o.symbol} @ {o.price:.2f} (Delivery CNC)")
+    for o, why in rejected:
+        print(f"  REJECT  {o.side.value} {o.qty} {o.symbol}: {why}")
+
+    if not approved:
+        print("No orders to execute.")
+        return
+
+    if args.dry_run:
+        print("DRY RUN: No live orders placed to Groww.")
+        return
+
+    if not args.yes:
+        confirm = input(f"Place {len(approved)} LIVE REAL-MONEY orders to Groww? Type 'YES' to confirm: ")
+        if confirm.strip() != "YES":
+            print("Aborted by user.")
+            return
+
+    for o in approved:
+        print(f"Placing LIVE CNC order: {o.side.value} {o.qty} {o.symbol}...")
+        resp = broker.place_order(o)
+        print("  Groww Response:", resp)
+    print("All live orders processed.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -277,6 +399,20 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--force-deposit", action="store_true", help="deposit even if already done this month")
     r.add_argument("--force-rebalance", action="store_true", help="trade even if the quarterly rebalance is not due")
     r.add_argument("--dry-run", action="store_true")
+
+    lr = sub.add_parser("live-run", help="Run one LIVE rebalance on Groww (Delivery CNC only)")
+    lr.add_argument("--dry-run", action="store_true", help="calculate orders without placing live trades")
+    lr.add_argument("--yes", action="store_true", help="skip confirmation prompt")
+
+    ks = sub.add_parser("kill-switch", help="Emergency circuit breaker controls")
+    ks.add_argument("--trigger", action="store_true", help="immediately engage the kill switch (halt trading)")
+    ks.add_argument("--reset", action="store_true", help="disengage the kill switch and resume normal operations")
+    ks.add_argument("--status", action="store_true", help="check kill switch state (default)")
+    ks.add_argument("--reason", default="", help="reason for engaging the kill switch")
+
+    gs = sub.add_parser("groww-status", help="Test Groww connection and check cash/holdings")
+    gs.add_argument("--force", action="store_true", help="force regenerate a fresh TOTP access token")
+
     args = p.parse_args(argv)
     cfg = load_config(args.config)
     {
@@ -284,10 +420,13 @@ def main(argv: list[str] | None = None) -> None:
         "screen": cmd_screen,
         "backtest": cmd_backtest,
         "paper-run": cmd_paper_run,
+        "live-run": cmd_live_run,
         "swing-backtest": cmd_swing_backtest,
         "swing-run": cmd_swing_run,
         "monitor": cmd_monitor,
         "dashboard": cmd_dashboard,
+        "kill-switch": cmd_kill_switch,
+        "groww-status": cmd_groww_status,
     }[args.cmd](args, cfg)
 
 

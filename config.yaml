@@ -54,3 +54,9 @@ costs:                                      # approximate Groww delivery charges
 swing:            # short-term PAPER sandbox (no real orders). Backtest: loses to costs at Rs 5k, see README
   start_date: "2026-11-09"
   capital: 50000
+
+broker:
+  mode: paper                                   # "paper" (default) or "live"
+  api_key: ""                                   # Groww API key (or set GROWW_API_KEY env var)
+  totp_secret: ""                               # Groww TOTP secret (or set GROWW_TOTP_SECRET env var)
+  token_cache_path: data/groww_token.json

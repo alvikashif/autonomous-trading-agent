@@ -8,10 +8,12 @@ version = "0.1.0"
 description = "Shariah-screened, delivery-only, paper-first trading agent for NSE"
 requires-python = ">=3.10"
 dependencies = [
-    "pandas>=2.0",
+    "pandas>=2.0,<3.0",
     "numpy>=1.26",
     "pyyaml>=6.0",
     "yfinance>=0.2.40",
+    "pyotp>=2.9.0",
+    "growwapi>=1.5.0",
 ]
 
 [project.optional-dependencies]
