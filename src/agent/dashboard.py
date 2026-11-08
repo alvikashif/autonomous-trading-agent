@@ -1567,7 +1567,20 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
 
             if path == "/api/summary":
                 ks_path = paths.get("kill_switch", "data/kill_switch.json")
-                broker_mode = getattr(getattr(cfg, "broker", None), "mode", "paper")
+                broker_mode = (
+                    cfg.broker.resolved_mode()
+                    if hasattr(cfg.broker, "resolved_mode")
+                    else getattr(getattr(cfg, "broker", None), "mode", "paper")
+                )
+                # Also check shared active_mode.json in data/ volume
+                active_mode_file = Path("data/active_mode.json")
+                if active_mode_file.is_file():
+                    try:
+                        mod_info = json.loads(active_mode_file.read_text(encoding="utf-8"))
+                        if mod_info.get("ai_auto_trade") is True or mod_info.get("broker_mode") == "live":
+                            broker_mode = "live"
+                    except Exception:
+                        pass
                 ai_path = paths.get("ai_signals", "data/ai_signals.json")
                 summary = build_summary(
                     paths["paper"], paths["monitor"], paths["screen"],

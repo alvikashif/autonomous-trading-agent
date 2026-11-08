@@ -57,6 +57,14 @@ class BrokerConfig:
     totp_secret: str = ""
     token_cache_path: str = "data/groww_token.json"
 
+    def resolved_mode(self) -> str:
+        env_mode = os.environ.get("BROKER_MODE", "").strip().lower()
+        if env_mode in ("live", "paper"):
+            return env_mode
+        if os.environ.get("AI_AUTO_TRADE", "").strip().lower() == "true":
+            return "live"
+        return self.mode.strip().lower() or "paper"
+
     def resolved_api_key(self) -> str:
         return os.environ.get("GROWW_API_KEY", "").strip() or self.api_key.strip()
 

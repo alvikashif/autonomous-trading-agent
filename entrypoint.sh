@@ -19,6 +19,12 @@ case "${AGENT_ROLE:-}" in
     exec "$@"
     ;;
   jobs)
+    mkdir -p /app/data
+    if [ "${AI_AUTO_TRADE:-false}" = "true" ]; then
+      echo '{"ai_auto_trade": true, "broker_mode": "live"}' > /app/data/active_mode.json
+    else
+      echo '{"ai_auto_trade": false, "broker_mode": "paper"}' > /app/data/active_mode.json
+    fi
     # Daily 16:00 IST, Mon-Fri. paper-run has its own guards (one deposit per
     # month, rebalance only when due), so repeated runs are safe.
     while true; do
