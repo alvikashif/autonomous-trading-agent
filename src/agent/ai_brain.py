@@ -168,7 +168,22 @@ You MUST reply with ONLY a single valid JSON object, without conversational fluf
 """
 
 
+def _normalize_claude_model(model: str) -> str:
+    m = model.strip()
+    if not m or "latest" in m or "3-5-sonnet" in m or "sonnet-3" in m:
+        return "claude-sonnet-5-5"
+    return m
+
+
+def _normalize_gemini_model(model: str) -> str:
+    m = model.strip()
+    if not m or "2.5-flash" in m or "flash-latest" in m:
+        return "gemini-3.5-flash"
+    return m
+
+
 def _call_claude(prompt: str, model: str, api_key: str) -> str:
+    active_model = _normalize_claude_model(model)
     url = "https://api.anthropic.com/v1/messages"
     headers = {
         "x-api-key": api_key,
@@ -176,7 +191,7 @@ def _call_claude(prompt: str, model: str, api_key: str) -> str:
         "content-type": "application/json",
     }
     payload = {
-        "model": model,
+        "model": active_model,
         "max_tokens": 2048,
         "messages": [{"role": "user", "content": prompt}],
     }
@@ -228,7 +243,8 @@ def _call_openai(prompt: str, model: str, api_key: str) -> str:
 
 
 def _call_gemini(prompt: str, model: str, api_key: str) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    active_model = _normalize_gemini_model(model)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{active_model}:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],

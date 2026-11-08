@@ -65,10 +65,10 @@ class BrokerConfig:
 
 
 DEFAULT_AI_MODELS: dict[str, str] = {
-    "claude": "claude-3-5-sonnet-latest",
+    "claude": "claude-sonnet-5-5",
     "deepseek": "deepseek-reasoner",
     "openai": "o3-mini",
-    "gemini": "gemini-2.5-flash",
+    "gemini": "gemini-3.5-flash",
 }
 
 

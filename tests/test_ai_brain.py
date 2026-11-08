@@ -33,7 +33,7 @@ def test_env_resolution_and_defaults(monkeypatch):
 
     cfg = AIBrainConfig()
     assert cfg.resolved_provider() == "claude"
-    assert cfg.resolved_model() == "claude-3-5-sonnet-latest"
+    assert cfg.resolved_model() == "claude-sonnet-5-5"
     assert cfg.resolved_api_key() == ""
     assert cfg.resolved_min_confidence() == 8.0
     assert cfg.resolved_max_allocation() == 5000.0
@@ -59,7 +59,7 @@ def test_env_resolution_and_defaults(monkeypatch):
     monkeypatch.delenv("AI_MODEL", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "AIzaSyMock")
     assert cfg.resolved_provider() == "gemini"
-    assert cfg.resolved_model() == "gemini-2.5-flash"
+    assert cfg.resolved_model() == "gemini-3.5-flash"
     assert cfg.resolved_api_key() == "AIzaSyMock"
 
     # Switch to OpenAI
