@@ -4,7 +4,11 @@ set -eu
 
 case "${AGENT_ROLE:-}" in
   monitor)
-    exec agent monitor --alert-only
+    if [ "${AI_AUTO_TRADE:-false}" = "true" ]; then
+      exec agent monitor --live
+    else
+      exec agent monitor --alert-only
+    fi
     ;;
   dashboard)
     # serve() refuses a non-loopback bind unless DASHBOARD_PASSWORD is set.

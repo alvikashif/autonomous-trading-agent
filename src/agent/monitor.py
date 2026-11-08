@@ -1,23 +1,31 @@
-"""Market-hours monitor (paper). Watches holdings, raises alerts, optionally enforces a stop-loss.
+"""Market-hours monitor. Watches holdings, raises alerts, and executes mid-day stop-loss or AI-evaluated profit taking.
 
 NSE trades Mon-Fri 09:15-15:30 IST. Outside that window the loop only writes a heartbeat.
 Exchange holidays are NOT known here: on a holiday quotes just stay unchanged.
 
-It never buys. The only automatic action is a paper SELL when a trailing stop is set and hit.
+Anti-throttling & Resiliency:
+- Default poll interval during market hours is 120s (configurable via MONITOR_INTERVAL).
+- Resilient quote fetching with Google Finance fallback to prevent Yahoo rate-limiting on cloud IPs.
+- Groww API is never hammered for quotes; only called for demat positions and order execution.
 """
 from __future__ import annotations
 
 import json
+import logging
 import math
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
 from .models import Order, Side
 from .paper import PaperBroker
+from .quotes import fetch_resilient_quotes
+
+logger = logging.getLogger(__name__)
 
 IST = ZoneInfo("Asia/Kolkata")
 OPEN, CLOSE = (9, 15), (15, 30)
@@ -32,7 +40,7 @@ def market_open(now: datetime) -> bool:
 
 @dataclass(frozen=True)
 class Event:
-    kind: str      # ALERT_DROP | STOP_HIT | DAILY_LOSS | NO_QUOTE
+    kind: str      # ALERT_DROP | STOP_HIT | DAILY_LOSS | NO_QUOTE | AI_STOP_HIT | AI_TARGET_REACHED
     symbol: str
     detail: str
 
@@ -73,58 +81,215 @@ def check_positions(
 
 
 def fetch_quotes(symbols: list[str]) -> tuple[dict[str, float], dict[str, float]]:
-    """(last price, previous close) per symbol from Yahoo. Missing symbols are omitted."""
-    import yfinance as yf  # lazy
-
-    last: dict[str, float] = {}
-    prev: dict[str, float] = {}
-    for s in symbols:
-        try:
-            fi = yf.Ticker(f"{s}.NS").fast_info
-            last[s] = float(fi["last_price"])
-            prev[s] = float(fi["previous_close"])
-        except Exception:
-            pass
-    return last, prev
+    """Legacy alias: delegates to fetch_resilient_quotes."""
+    return fetch_resilient_quotes(symbols)
 
 
-def _load(path: Path) -> dict:
+def _load(path: Path | str) -> dict:
     try:
-        return json.loads(path.read_text())
+        p = Path(path)
+        if not p.is_file():
+            return {}
+        return json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
-def run_once(paper_path: str, status_path: str, cost_cfg, stop_pct: float, alert_pct: float,
-             daily_loss_limit_pct: float, act: bool, now: datetime | None = None, quote_fn=fetch_quotes) -> dict:
+def _save(path: Path | str, data: dict) -> None:
+    try:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    except OSError as exc:
+        logger.error("Failed to write to %s: %s", path, exc)
+
+
+def run_once(
+    paper_path: str,
+    status_path: str,
+    cost_cfg,
+    stop_pct: float,
+    alert_pct: float,
+    daily_loss_limit_pct: float,
+    act: bool,
+    now: datetime | None = None,
+    quote_fn=None,
+    ai_signals_path: str = "",
+    broker: Any = None,
+    ai_cfg: Any = None,
+    live_mode: bool = False,
+    kill_switch_path: str = "data/kill_switch.json",
+) -> dict:
     now = now or datetime.now(IST)
     status_file = Path(status_path)
     status = _load(status_file)
     peaks: dict[str, float] = {k: float(v) for k, v in status.get("peaks", {}).items()}
     alerts: list[dict] = status.get("alerts", [])
     is_open = market_open(now)
-    broker = PaperBroker(paper_path, cost_cfg)
-    positions = broker.positions()
+
+    quote_fetcher = quote_fn if quote_fn is not None else fetch_resilient_quotes
+
+    # Base paper positions
+    paper_broker = PaperBroker(paper_path, cost_cfg)
+    positions = paper_broker.positions()
+
+    # Active AI Swing Position
+    ai_sig = _load(ai_signals_path) if ai_signals_path else {}
+    selected = ai_sig.get("selected_trade")
+    ai_symbol: str = ""
+    ai_qty: int = 0
+    if selected and ai_sig.get("verdict") == "EXECUTE" and not selected.get("exit"):
+        ai_symbol = selected.get("symbol", "").upper()
+        if live_mode and broker and hasattr(broker, "positions"):
+            live_pos = broker.positions()
+            ai_qty = live_pos.get(ai_symbol, 0)
+        else:
+            ai_qty = selected.get("qty", 1)
+
+    # Collect all symbols needing quotes
+    syms_to_quote = set(positions.keys())
+    if ai_symbol and ai_qty > 0:
+        syms_to_quote.add(ai_symbol)
+
     quotes, prev = ({}, {})
     new_events: list[Event] = []
-    if is_open and positions:
-        quotes, prev = quote_fn(list(positions))
-        new_events = check_positions(positions, quotes, prev, peaks, stop_pct, alert_pct, daily_loss_limit_pct)
-        if act and stop_pct > 0:
-            for ev in new_events:
-                if ev.kind == "STOP_HIT" and positions.get(ev.symbol):
-                    broker.place_order(Order(ev.symbol, Side.SELL, positions[ev.symbol], quotes[ev.symbol]),
-                                       ts=now.date().isoformat())
-                    peaks.pop(ev.symbol, None)
-                    broker.save()
-                    alerts.append({"ts": now.isoformat(timespec="seconds"), "kind": "STOP_SOLD",
-                                   "symbol": ev.symbol, "detail": "paper sell executed"})
+
+    if is_open and syms_to_quote:
+        quotes, prev = quote_fetcher(list(syms_to_quote))
+
+        # Check paper positions
+        if positions:
+            new_events.extend(check_positions(positions, quotes, prev, peaks, stop_pct, alert_pct, daily_loss_limit_pct))
+            if act and stop_pct > 0:
+                for ev in new_events:
+                    if ev.kind == "STOP_HIT" and positions.get(ev.symbol):
+                        paper_broker.place_order(
+                            Order(ev.symbol, Side.SELL, positions[ev.symbol], quotes[ev.symbol]),
+                            ts=now.date().isoformat(),
+                        )
+                        peaks.pop(ev.symbol, None)
+                        paper_broker.save()
+                        alerts.append({
+                            "ts": now.isoformat(timespec="seconds"),
+                            "kind": "STOP_SOLD",
+                            "symbol": ev.symbol,
+                            "detail": "paper sell executed",
+                        })
+
+        # Check Mid-Day AI Swing Position (Stop Loss or Take Profit)
+        if ai_symbol and ai_qty > 0 and ai_symbol in quotes:
+            cur_px = quotes[ai_symbol]
+            entry_px = float(selected.get("entry_price", cur_px))
+            target_px = float(selected.get("target_price", entry_px * 1.08))
+            stop_px = float(selected.get("stop_loss", entry_px * 0.96))
+            peaks[ai_symbol] = max(peaks.get(ai_symbol, cur_px), cur_px)
+
+            stamp = now.isoformat(timespec="seconds")
+
+            # 1. Mid-Day Stop-Loss Breach
+            if cur_px <= stop_px:
+                ev_detail = f"Mid-day price Rs {cur_px:.2f} <= stop Rs {stop_px:.2f} (loss {(cur_px/entry_px-1)*100:.1f}%)"
+                new_events.append(Event("AI_STOP_HIT", ai_symbol, ev_detail))
+                if act:
+                    from .kill_switch import is_kill_switch_active
+                    if is_kill_switch_active(kill_switch_path):
+                        alerts.append({"ts": stamp, "kind": "KILL_SWITCH_BLOCKED", "symbol": ai_symbol,
+                                       "detail": "Stop loss sell blocked by active Kill Switch."})
+                    else:
+                        active_broker = broker if (live_mode and broker) else paper_broker
+                        sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
+                        active_broker.place_order(sell_order)
+                        selected["exit"] = {
+                            "type": "STOP_LOSS",
+                            "price": cur_px,
+                            "timestamp": stamp,
+                            "qty": ai_qty,
+                            "pnl_pct": (cur_px / entry_px - 1),
+                        }
+                        ai_sig["selected_trade"] = selected
+                        _save(ai_signals_path, ai_sig)
+                        alerts.append({
+                            "ts": stamp,
+                            "kind": "AI_STOP_EXECUTED",
+                            "symbol": ai_symbol,
+                            "detail": f"Sold {ai_qty} shares @ Rs {cur_px:.2f} ({'LIVE' if live_mode else 'PAPER'})",
+                        })
+
+            # 2. Mid-Day Profit Target Reached
+            elif cur_px >= target_px:
+                ev_detail = f"Mid-day price Rs {cur_px:.2f} >= target Rs {target_px:.2f} (gain +{(cur_px/entry_px-1)*100:.1f}%)"
+                new_events.append(Event("AI_TARGET_REACHED", ai_symbol, ev_detail))
+
+                # Ask AI Brain whether to take profit now or hold & trail
+                ai_decision = "TAKE_PROFIT"
+                ai_reason = "Target reached, default take-profit."
+                eval_payload = None
+
+                if ai_cfg and hasattr(ai_cfg, "resolved_api_key") and ai_cfg.resolved_api_key():
+                    try:
+                        from .ai_brain import evaluate_take_profit
+                        holding_info = {
+                            "symbol": ai_symbol,
+                            "entry_price": entry_px,
+                            "current_price": cur_px,
+                            "gain_pct": (cur_px / entry_px - 1),
+                        }
+                        eval_payload = evaluate_take_profit(holding_info, None, ai_cfg)
+                        ai_decision = eval_payload.get("decision", "TAKE_PROFIT")
+                        ai_reason = eval_payload.get("reason", "")
+                        ai_sig.setdefault("exit_evaluations", {})[ai_symbol] = eval_payload
+                    except Exception as err:
+                        logger.error("AI Brain take-profit evaluation failed: %s", err)
+
+                if ai_decision == "HOLD_AND_TRAIL" and eval_payload:
+                    # AI recommends trailing higher: adjust target & stop in state
+                    rev_target = eval_payload.get("revised_target_price", cur_px * 1.05)
+                    trail_stop = eval_payload.get("trailing_stop_price", cur_px * 0.95)
+                    selected["target_price"] = rev_target
+                    selected["stop_loss"] = trail_stop
+                    ai_sig["selected_trade"] = selected
+                    _save(ai_signals_path, ai_sig)
+                    alerts.append({
+                        "ts": stamp,
+                        "kind": "AI_HOLD_AND_TRAIL",
+                        "symbol": ai_symbol,
+                        "detail": f"AI advised trail: Revised Target Rs {rev_target:.2f}, Trailing Stop Rs {trail_stop:.2f} ({ai_reason})",
+                    })
+                else:
+                    # Execute Profit Taking
+                    if act:
+                        from .kill_switch import is_kill_switch_active
+                        if is_kill_switch_active(kill_switch_path):
+                            alerts.append({"ts": stamp, "kind": "KILL_SWITCH_BLOCKED", "symbol": ai_symbol,
+                                           "detail": "Take profit sell blocked by active Kill Switch."})
+                        else:
+                            active_broker = broker if (live_mode and broker) else paper_broker
+                            sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
+                            active_broker.place_order(sell_order)
+                            selected["exit"] = {
+                                "type": "TAKE_PROFIT",
+                                "price": cur_px,
+                                "timestamp": stamp,
+                                "qty": ai_qty,
+                                "pnl_pct": (cur_px / entry_px - 1),
+                                "ai_reason": ai_reason,
+                            }
+                            ai_sig["selected_trade"] = selected
+                            _save(ai_signals_path, ai_sig)
+                            alerts.append({
+                                "ts": stamp,
+                                "kind": "AI_PROFIT_TAKEN",
+                                "symbol": ai_symbol,
+                                "detail": f"Took profit: Sold {ai_qty} shares @ Rs {cur_px:.2f} (+{(cur_px/entry_px-1)*100:.1f}%) ({'LIVE' if live_mode else 'PAPER'})",
+                            })
+
     stamp = now.isoformat(timespec="seconds")
     for ev in new_events:
-        # one alert per (kind, symbol) per day, so a 60s loop does not spam
+        # one alert per (kind, symbol) per day to prevent log spamming
         key = (ev.kind, ev.symbol, stamp[:10])
-        if not any((a["kind"], a["symbol"], a["ts"][:10]) == key for a in alerts):
+        if not any((a.get("kind"), a.get("symbol"), str(a.get("ts", ""))[:10]) == key for a in alerts):
             alerts.append({"ts": stamp, "kind": ev.kind, "symbol": ev.symbol, "detail": ev.detail})
+
     status = {
         "heartbeat": stamp,
         "market_open": is_open,
@@ -133,6 +298,8 @@ def run_once(paper_path: str, status_path: str, cost_cfg, stop_pct: float, alert
         "prev_close": prev or status.get("prev_close", {}),
         "stop_pct": stop_pct,
         "act": act,
+        "live_mode": live_mode,
+        "ai_monitored": bool(ai_symbol and ai_qty > 0),
         "alerts": alerts[-50:],
     }
     status_file.parent.mkdir(parents=True, exist_ok=True)
@@ -140,14 +307,55 @@ def run_once(paper_path: str, status_path: str, cost_cfg, stop_pct: float, alert
     return status
 
 
-def run_forever(paper_path: str, status_path: str, cost_cfg, stop_pct: float, alert_pct: float,
-                daily_loss_limit_pct: float, act: bool, open_interval: int = 60, closed_interval: int = 300,
-                log=print) -> None:
-    log(f"monitor started: stop={stop_pct:.0%} act={act} (paper only). Ctrl+C to stop.")
+def run_forever(
+    paper_path: str,
+    status_path: str,
+    cost_cfg,
+    stop_pct: float,
+    alert_pct: float,
+    daily_loss_limit_pct: float,
+    act: bool,
+    open_interval: int | None = None,
+    closed_interval: int = 300,
+    quote_fn=None,
+    ai_signals_path: str = "",
+    broker: Any = None,
+    ai_cfg: Any = None,
+    live_mode: bool = False,
+    kill_switch_path: str = "data/kill_switch.json",
+    log=print,
+) -> None:
+    # Default interval: 120s during market hours (prevents cloud IP rate-limiting)
+    if open_interval is None:
+        try:
+            open_interval = int(os.environ.get("MONITOR_INTERVAL", "120"))
+        except ValueError:
+            open_interval = 120
+
+    mode_label = "LIVE GROWW" if live_mode else "PAPER"
+    log(f"Monitor started [{mode_label}]: act={act}, poll={open_interval}s open / {closed_interval}s closed.")
+    log(f"Rate-limit guard: Anti-throttling active with Google Finance fallback. Ctrl+C to stop.")
+
     while True:
         try:
-            st = run_once(paper_path, status_path, cost_cfg, stop_pct, alert_pct, daily_loss_limit_pct, act)
-            log(f"{st['heartbeat']} market_open={st['market_open']} alerts={len(st['alerts'])}")
-        except Exception as exc:  # keep running through network blips
-            log(f"monitor error (continuing): {exc}")
+            st = run_once(
+                paper_path=paper_path,
+                status_path=status_path,
+                cost_cfg=cost_cfg,
+                stop_pct=stop_pct,
+                alert_pct=alert_pct,
+                daily_loss_limit_pct=daily_loss_limit_pct,
+                act=act,
+                quote_fn=quote_fn,
+                ai_signals_path=ai_signals_path,
+                broker=broker,
+                ai_cfg=ai_cfg,
+                live_mode=live_mode,
+                kill_switch_path=kill_switch_path,
+            )
+            log(f"{st['heartbeat']} market_open={st['market_open']} alerts={len(st['alerts'])} ai_monitored={st.get('ai_monitored', False)}")
+        except Exception as exc:  # keep running through transient network blips
+            log(f"Monitor error (continuing): {exc}")
+
+        # Sleep between checks: 120s during market open, 300s when closed
         time.sleep(open_interval if market_open(datetime.now(IST)) else closed_interval)

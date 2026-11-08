@@ -243,14 +243,36 @@ def cmd_swing_run(args, cfg) -> None:
 def cmd_monitor(args, cfg) -> None:
     from .monitor import run_forever, run_once
 
+    broker = None
+    live_mode = getattr(args, "live", False)
+    if live_mode:
+        from .broker import GrowwBroker
+        api_key = cfg.broker.resolved_api_key()
+        totp = cfg.broker.resolved_totp_secret()
+        if api_key and totp:
+            broker = GrowwBroker(api_key=api_key, totp_secret=totp, token_cache_path=cfg.broker.token_cache_path)
+            try:
+                broker.authenticate()
+            except Exception as e:
+                print(f"Warning: Groww authentication failed in monitor: {e}")
+
     kwargs = dict(
-        paper_path=cfg.universe.paper_state_json, status_path=cfg.universe.monitor_status_json,
-        cost_cfg=cfg.costs, stop_pct=cfg.portfolio.stop_loss_pct, alert_pct=cfg.portfolio.alert_drop_pct,
-        daily_loss_limit_pct=cfg.risk.daily_loss_limit_pct, act=not args.alert_only,
+        paper_path=cfg.universe.paper_state_json,
+        status_path=cfg.universe.monitor_status_json,
+        cost_cfg=cfg.costs,
+        stop_pct=cfg.portfolio.stop_loss_pct,
+        alert_pct=cfg.portfolio.alert_drop_pct,
+        daily_loss_limit_pct=cfg.risk.daily_loss_limit_pct,
+        act=not args.alert_only,
+        ai_signals_path=cfg.universe.ai_signals_json,
+        broker=broker,
+        ai_cfg=cfg.ai,
+        live_mode=live_mode,
+        kill_switch_path=cfg.universe.kill_switch_json,
     )
     if args.once:
         st = run_once(**kwargs)
-        print(f"{st['heartbeat']} market_open={st['market_open']} alerts={len(st['alerts'])}")
+        print(f"{st['heartbeat']} market_open={st['market_open']} alerts={len(st['alerts'])} live={st.get('live_mode')} ai_monitored={st.get('ai_monitored')}")
     else:
         run_forever(**kwargs)
 
@@ -707,9 +729,10 @@ def main(argv: list[str] | None = None) -> None:
     sw.add_argument("--positions", type=int, default=2)
     sw.add_argument("--capital", type=float, default=5000.0)
     sw.add_argument("--seeds", type=int, default=20)
-    mo = sub.add_parser("monitor", help="Watch holdings during NSE hours (paper), alert / enforce stop")
+    mo = sub.add_parser("monitor", help="Watch holdings during NSE hours (paper/live), alert / enforce stop / take profit")
     mo.add_argument("--once", action="store_true", help="single check then exit")
     mo.add_argument("--alert-only", action="store_true", help="never sell, even if a stop is configured")
+    mo.add_argument("--live", action="store_true", help="monitor and execute mid-day exits on live Groww account")
     da = sub.add_parser("dashboard", help="Read-only local dashboard")
     da.add_argument("--host", default="127.0.0.1")
     da.add_argument("--port", type=int, default=8765)
