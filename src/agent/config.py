@@ -21,6 +21,7 @@ class UniverseConfig:
     paper_state_json: str = "data/paper_state.json"
     monitor_status_json: str = "data/monitor_status.json"
     swing_status_json: str = "data/swing_status.json"
+    ai_signals_json: str = "data/ai_signals.json"
     kill_switch_json: str = "data/kill_switch.json"
     excluded_symbols: tuple[str, ...] = ()
 
@@ -63,6 +64,69 @@ class BrokerConfig:
         return os.environ.get("GROWW_TOTP_SECRET", "").strip() or self.totp_secret.strip()
 
 
+DEFAULT_AI_MODELS: dict[str, str] = {
+    "claude": "claude-3-5-sonnet-latest",
+    "deepseek": "deepseek-reasoner",
+    "openai": "o3-mini",
+    "gemini": "gemini-2.5-flash",
+}
+
+
+@dataclass(frozen=True)
+class AIBrainConfig:
+    provider: str = ""          # "claude", "deepseek", "openai", "gemini"
+    model: str = ""             # model ID override, or uses default for the provider
+    min_confidence: float = 8.0 # 1.0 to 10.0 scale, minimum score to consider execution
+    max_allocation: float = 5000.0  # max rupees per position (e.g. Rs 5k test)
+    max_positions: int = 1      # max concurrent swing positions
+    target_pct: float = 0.08    # +8% profit target
+    stop_pct: float = 0.04      # -4% stop loss
+    max_hold_days: int = 10     # exit after 10 trading days
+
+    def resolved_provider(self) -> str:
+        return os.environ.get("AI_PROVIDER", "").strip().lower() or self.provider.strip().lower() or "claude"
+
+    def resolved_model(self) -> str:
+        m = os.environ.get("AI_MODEL", "").strip() or self.model.strip()
+        if m:
+            return m
+        prov = self.resolved_provider()
+        return DEFAULT_AI_MODELS.get(prov, "claude-3-5-sonnet-latest")
+
+    def resolved_api_key(self) -> str:
+        prov = self.resolved_provider()
+        if prov == "claude":
+            return os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        elif prov == "deepseek":
+            return os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        elif prov == "openai":
+            return os.environ.get("OPENAI_API_KEY", "").strip()
+        elif prov == "gemini":
+            return os.environ.get("GEMINI_API_KEY", "").strip()
+        return ""
+
+    def resolved_min_confidence(self) -> float:
+        val = os.environ.get("AI_MIN_CONFIDENCE", "").strip()
+        try:
+            return float(val) if val else self.min_confidence
+        except ValueError:
+            return self.min_confidence
+
+    def resolved_max_allocation(self) -> float:
+        val = os.environ.get("AI_MAX_ALLOCATION", "").strip()
+        try:
+            return float(val) if val else self.max_allocation
+        except ValueError:
+            return self.max_allocation
+
+    def resolved_max_positions(self) -> int:
+        val = os.environ.get("AI_MAX_POSITIONS", "").strip()
+        try:
+            return int(val) if val else self.max_positions
+        except ValueError:
+            return self.max_positions
+
+
 @dataclass(frozen=True)
 class Config:
     universe: UniverseConfig = field(default_factory=UniverseConfig)
@@ -73,6 +137,28 @@ class Config:
     costs: CostConfig = field(default_factory=CostConfig)
     swing: SwingConfig = field(default_factory=SwingConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
+    ai: AIBrainConfig = field(default_factory=AIBrainConfig)
+
+
+def load_dotenv(path: str | Path = ".env") -> None:
+    """Load key=value lines from .env into os.environ if not already present."""
+    p = Path(path)
+    if not p.is_file():
+        return
+    try:
+        content = p.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip("'\"")
+            if key and key not in os.environ:
+                os.environ[key] = val
 
 
 def _build(cls, raw: dict):
@@ -87,6 +173,7 @@ def _build(cls, raw: dict):
 
 
 def load_config(path: str | Path = "config.yaml") -> Config:
+    load_dotenv()
     p = Path(path)
     raw = yaml.safe_load(p.read_text()) if p.exists() else {}
     raw = raw or {}

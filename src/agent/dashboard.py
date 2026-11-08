@@ -55,7 +55,8 @@ def _last_closes(prices_cache: str, symbols: list[str]) -> dict[str, float]:
 
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
                   rebalance_months: int, swing_path: str | None = None,
-                  kill_switch_path: str | None = None, broker_mode: str = "paper") -> dict:
+                  kill_switch_path: str | None = None, broker_mode: str = "paper",
+                  ai_signals_path: str | None = None) -> dict:
     state = _read_json(paper_path)
     mon = _read_json(monitor_path)
     positions: dict[str, int] = {k: int(v) for k, v in state.get("positions", {}).items() if int(v) > 0}
@@ -110,6 +111,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "screen": screen,
         "swing": _read_json(swing_path) if swing_path else {},
         "kill_switch": get_kill_switch_status(kill_switch_path or "data/kill_switch.json"),
+        "ai_signals": _read_json(ai_signals_path) if ai_signals_path else {},
     }
 
 
@@ -153,6 +155,14 @@ th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:6
 <div class="card"><h2>Holdings</h2><table id="hold"></table></div>
 <div class="card" id="swingcard" style="display:none"><h2>Swing sandbox (paper, experimental)</h2><div id="swsum"></div>
 <table id="swhold"></table><div class="mute" style="margin-top:8px" id="swnext"></div><table id="swtr"></table></div>
+<div class="card" id="aicard" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h2 style="margin:0">AI Trading Brain</h2>
+    <span id="aimodel" class="pill"></span>
+  </div>
+  <div id="aisum"></div>
+  <div id="aitrade" style="margin-top:10px;padding:10px;border-radius:6px;background:var(--bg)"></div>
+</div>
 <div class="card"><h2>Alerts</h2><div id="alerts" class="mute">none</div></div>
 <div class="card"><h2>Recent trades</h2><table id="trades"></table></div>
 <div class="mute" style="font-size:12px;margin:8px 0 24px">Read-only view. Simulated trades only. Not investment advice.</div>
@@ -205,6 +215,7 @@ async function load(){
  const a=document.getElementById('alerts');a.replaceChildren();
  if(!m.alerts.length)a.textContent='none';else m.alerts.forEach(x=>{const p=el('div','warn',x.ts.replace('T',' ')+'  '+x.kind+'  '+x.symbol+'  '+x.detail);a.appendChild(p)});
  swing(d.swing);
+ renderAI(d.ai_signals);
  fill('trades',[row(['Date','Stock','Side','Qty','Price','Fees'].map(t=>({t})),true),
   ...d.trades.map(t=>row([{t:t.ts.slice(0,10)},{t:t.symbol},{t:t.side,c:t.side==='BUY'?'up':'down'},{t:t.qty},{t:px(t.fill_price)},{t:px(t.cost)}]))]);
 }
@@ -218,6 +229,26 @@ function swing(s){
  document.getElementById('swnext').textContent=s.pending_buy.length?('Buys at next close (as of '+s.as_of+'): '+s.pending_buy.join(', ')):'No buys queued.';
  fill('swtr',[row(['Closed','Entry','Exit','Why','Net','Net %'].map(t=>({t})),true),
   ...s.recent.map(r=>row([{t:r.symbol},{t:r.entry,c:'mute'},{t:r.exit,c:'mute'},{t:r.reason},{t:inr(r.net),c:cls(r.net)},{t:pct(r.net_pct),c:cls(r.net_pct)}]))]);
+}
+function renderAI(ai){
+ const c=document.getElementById('aicard');if(!ai||!ai.verdict){c.style.display='none';return}c.style.display='';
+ const p=(ai.provider||'AI').toUpperCase();const m=ai.model||'';
+ document.getElementById('aimodel').textContent=p+(m?(' · '+m):'');
+ const sum=document.getElementById('aisum');sum.replaceChildren();
+ const vClass=ai.verdict==='EXECUTE'?'up':'warn';
+ const top=el('div','',`Verdict: `);
+ top.appendChild(el('strong',vClass,ai.verdict));
+ top.appendChild(document.createTextNode(` · Regime: ${(ai.market_regime||'neutral').toUpperCase()} · Scanned: ${ai.scan_timestamp||''}`));
+ sum.appendChild(top);
+ if(ai.decision_summary)sum.appendChild(el('div','mute',ai.decision_summary));
+ const tr=document.getElementById('aitrade');tr.replaceChildren();
+ const s=ai.selected_trade;
+ if(s){
+  tr.appendChild(el('div','',`Recommended Trade: ${s.symbol} (${s.action}) · Entry: ${px(s.entry_price)} · Target: ${px(s.target_price)} (+8%) · Stop: ${px(s.stop_loss)} (-4%) · Conviction: ${s.confidence_score!=null?s.confidence_score.toFixed(1):'–'}/10`));
+  if(s.thesis)tr.appendChild(el('div','mute','Thesis: '+s.thesis));
+ }else{
+  tr.appendChild(el('div','mute','No trade executed (insufficient conviction or unfavorable market regime).'));
+ }
 }
 load();setInterval(load,15000);
 </script></body></html>"""
@@ -261,10 +292,12 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
             if path == "/api/summary":
                 ks_path = paths.get("kill_switch", "data/kill_switch.json")
                 broker_mode = getattr(getattr(cfg, "broker", None), "mode", "paper")
+                ai_path = paths.get("ai_signals", "data/ai_signals.json")
                 data = json.dumps(build_summary(
                     paths["paper"], paths["monitor"], paths["screen"],
                     paths["prices"], cfg.portfolio.rebalance_months, paths.get("swing"),
                     kill_switch_path=ks_path, broker_mode=broker_mode,
+                    ai_signals_path=ai_path,
                 )).encode()
                 ctype = "application/json"
             elif path in ("/", "/index.html"):

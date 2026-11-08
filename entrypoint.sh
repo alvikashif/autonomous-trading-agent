@@ -25,6 +25,12 @@ case "${AGENT_ROLE:-}" in
       if [ "$(date +%u)" -le 5 ]; then
         agent paper-run --deposit || echo "paper-run failed: $?"
         agent swing-run || echo "swing-run failed: $?"
+        if [ -n "${ANTHROPIC_API_KEY:-}" ] || [ -n "${DEEPSEEK_API_KEY:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ]; then
+          agent ai-scan || echo "ai-scan failed: $?"
+          if [ "${AI_AUTO_TRADE:-false}" = "true" ]; then
+            agent ai-trade --live --yes || echo "ai-trade failed: $?"
+          fi
+        fi
       fi
     done
     ;;

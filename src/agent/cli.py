@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
 
@@ -244,6 +245,7 @@ def cmd_dashboard(args, cfg) -> None:
         "screen": cfg.universe.screen_report_csv,
         "prices": cfg.universe.prices_cache_csv,
         "swing": cfg.universe.swing_status_json,
+        "ai_signals": cfg.universe.ai_signals_json,
         "kill_switch": cfg.universe.kill_switch_json,
     }
     serve(cfg, paths, host=args.host, port=args.port, extra_hosts=tuple(args.allow_host or ()))
@@ -360,6 +362,221 @@ def cmd_live_run(args, cfg) -> None:
     print("All live orders processed.")
 
 
+def cmd_ai_status(args, cfg) -> None:
+    from .ai_brain import load_ai_signals
+
+    ai = cfg.ai
+    provider = ai.resolved_provider()
+    model = ai.resolved_model()
+    key = ai.resolved_api_key()
+    masked_key = (key[:6] + "..." + key[-4:]) if len(key) > 10 else ("Configured" if key else "MISSING")
+
+    print("=== AI Trading Brain Status ===")
+    print(f"Provider (ENV/Config) : {provider}")
+    print(f"Model (ENV/Config)    : {model}")
+    print(f"API Key               : {masked_key}")
+    print(f"Min Confidence        : {ai.resolved_min_confidence()} / 10.0")
+    print(f"Max Allocation        : Rs {ai.resolved_max_allocation():,.0f}")
+    print(f"Max Positions         : {ai.resolved_max_positions()}")
+
+    signals = load_ai_signals(cfg.universe.ai_signals_json)
+    if not signals:
+        print("\nLatest AI Signal      : No scans run yet (run `agent ai-scan`)")
+    else:
+        print(f"\nLatest Scan Time      : {signals.get('scan_timestamp', 'unknown')}")
+        print(f"Market Regime         : {signals.get('market_regime', 'unknown').upper()}")
+        print(f"Verdict               : {signals.get('verdict', 'unknown')}")
+        print(f"Summary               : {signals.get('decision_summary', 'none')}")
+        sel = signals.get("selected_trade")
+        if sel:
+            print(f"Selected Stock        : {sel['symbol']} ({sel['action']})")
+            print(f"Entry Price           : Rs {sel['entry_price']:.2f}")
+            print(f"Target (+8%)          : Rs {sel['target_price']:.2f}")
+            print(f"Stop Loss (-4%)       : Rs {sel['stop_loss']:.2f}")
+            print(f"Conviction Score      : {sel['confidence_score']:.1f} / 10.0")
+            print(f"Thesis                : {sel['thesis']}")
+
+
+def cmd_ai_scan(args, cfg) -> None:
+    from .ai_brain import (
+        build_analysis_prompt,
+        clean_json_response,
+        extract_technical_candidates,
+        query_llm,
+        save_ai_signals,
+        validate_ai_decision,
+    )
+
+    ai = cfg.ai
+    provider = ai.resolved_provider()
+    model = ai.resolved_model()
+    api_key = ai.resolved_api_key()
+
+    print(f"Scanning for AI swing opportunities using {provider.upper()} ({model})...")
+
+    elig = _eligible_report(cfg.universe.screen_report_csv)
+    if elig.empty:
+        raise SystemExit("No compliant stocks found. Run `agent screen` first.")
+    compliant_symbols = set(elig["symbol"])
+
+    prices_path = cfg.universe.prices_cache_csv
+    if not Path(prices_path).is_file():
+        raise SystemExit(f"Prices cache not found at {prices_path}. Run `agent backtest` or update cache first.")
+    prices_df = pd.read_csv(prices_path, index_col=0, parse_dates=True)
+
+    fund_path = cfg.universe.fundamentals_csv
+    fund_df = load_fundamentals(fund_path) if Path(fund_path).is_file() else pd.DataFrame()
+
+    candidates = extract_technical_candidates(
+        prices_df,
+        compliant_symbols,
+        fund_df,
+        max_candidates=10,
+        max_price=ai.resolved_max_allocation(),
+    )
+
+    if not candidates:
+        print("No breakout candidates found within price and technical criteria.")
+        return
+
+    print(f"Found {len(candidates)} pre-screened breakout candidates (max Rs {ai.resolved_max_allocation():,.0f}):")
+    for c in candidates:
+        print(f"  {c['symbol']:<12} Rs {c['current_price']:<8.2f} (20d ret: +{c['ret_20d_pct']}%, RSI: {c['rsi_14']})")
+
+    if args.dry_run:
+        print("\nDRY RUN: Prompt prepared. Skipping actual LLM API call.")
+        return
+
+    if not api_key:
+        raise SystemExit(
+            f"ERROR: Missing API key for {provider.upper()}. "
+            f"Please set {provider.upper()}_API_KEY in your ENV or CapRover configuration."
+        )
+
+    prompt = build_analysis_prompt(
+        candidates=candidates,
+        capital=ai.resolved_max_allocation(),
+        min_confidence=ai.resolved_min_confidence(),
+        target_pct=ai.target_pct,
+        stop_pct=ai.stop_pct,
+    )
+
+    print(f"\nQuerying {provider} ({model})...")
+    raw_response = query_llm(prompt, provider, model, api_key)
+    parsed = clean_json_response(raw_response)
+    validated = validate_ai_decision(parsed, compliant_symbols, min_confidence=ai.resolved_min_confidence())
+    validated["provider"] = provider
+    validated["model"] = model
+
+    save_ai_signals(validated, cfg.universe.ai_signals_json)
+    print(f"Analysis saved to {cfg.universe.ai_signals_json}")
+    print("\n--- AI Brain Decision ---")
+    print(f"Verdict         : {validated.get('verdict')}")
+    print(f"Market Regime   : {validated.get('market_regime', '').upper()}")
+    print(f"Summary         : {validated.get('decision_summary')}")
+    sel = validated.get("selected_trade")
+    if sel:
+        print(f"Selected Stock  : {sel['symbol']}")
+        print(f"Entry Price     : Rs {sel['entry_price']:.2f}")
+        print(f"Target (+8%)    : Rs {sel['target_price']:.2f}")
+        print(f"Stop Loss (-4%) : Rs {sel['stop_loss']:.2f}")
+        print(f"Conviction      : {sel['confidence_score']:.1f} / 10.0")
+        print(f"Thesis          : {sel['thesis']}")
+        print(f"Risks           : {', '.join(sel.get('risks', []))}")
+
+
+def cmd_ai_trade(args, cfg) -> None:
+    from .ai_brain import compute_order_size, load_ai_signals
+    from .broker import GrowwBroker
+    from .kill_switch import is_kill_switch_active
+    from .models import Order, Side
+
+    # Emergency Kill Switch Check
+    if is_kill_switch_active(cfg.universe.kill_switch_json):
+        raise SystemExit("EMERGENCY KILL SWITCH IS ACTIVE! All trading orders are blocked.")
+
+    signals = load_ai_signals(cfg.universe.ai_signals_json)
+    if not signals:
+        raise SystemExit("No AI signals found. Run `agent ai-scan` first.")
+
+    verdict = signals.get("verdict")
+    selected = signals.get("selected_trade")
+    if verdict != "EXECUTE" or not selected:
+        print(f"AI Decision was '{verdict}': {signals.get('decision_summary', 'No trade selected')}")
+        return
+
+    symbol = selected["symbol"]
+    entry_px = float(selected["entry_price"])
+    confidence = float(selected.get("confidence_score", 0.0))
+    min_conf = cfg.ai.resolved_min_confidence()
+
+    if confidence < min_conf:
+        print(f"Aborting: Conviction {confidence:.1f} is below minimum threshold {min_conf:.1f}.")
+        return
+
+    max_alloc = cfg.ai.resolved_max_allocation()
+    broker_mode = "live" if args.live else "paper"
+
+    print(f"=== AI Trade Execution [{broker_mode.upper()} MODE] ===")
+    print(f"Stock        : {symbol}")
+    print(f"Entry Target : Rs {entry_px:.2f}")
+    print(f"Profit Target: Rs {selected['target_price']:.2f} (+8%)")
+    print(f"Stop Loss    : Rs {selected['stop_loss']:.2f} (-4%)")
+    print(f"Conviction   : {confidence:.1f} / 10.0")
+
+    if not args.live:
+        sizing = compute_order_size(selected, max_alloc)
+        qty = sizing["qty"]
+        trade_val = sizing["trade_value"]
+        print(f"Position Size: {qty} shares @ Rs {entry_px:.2f} = Rs {trade_val:,.2f}")
+        print("PAPER MODE: Trade registered in simulation state.")
+        return
+
+    # LIVE Groww Execution
+    b_cfg = cfg.broker
+    api_key = b_cfg.resolved_api_key()
+    totp_secret = b_cfg.resolved_totp_secret()
+    if not api_key or not totp_secret:
+        raise SystemExit("Missing Groww credentials for live order execution.")
+
+    broker = GrowwBroker(api_key=api_key, totp_secret=totp_secret, token_cache_path=b_cfg.token_cache_path)
+    broker.authenticate()
+    live_cash = broker.cash()
+    print(f"Available Groww Balance: Rs {live_cash:,.2f}")
+
+    sizing = compute_order_size(selected, max_alloc, cash_balance=live_cash)
+    qty = sizing["qty"]
+    trade_val = sizing["trade_value"]
+
+    if qty <= 0:
+        raise SystemExit(
+            f"Insufficient funds or share price too high: 1 share is Rs {entry_px:.2f}, balance is Rs {live_cash:.2f}"
+        )
+
+    print(f"Order: BUY {qty} shares of {symbol} (Est: Rs {trade_val:,.2f}, CNC Delivery)")
+
+    if args.dry_run:
+        print("DRY RUN: No live order placed.")
+        return
+
+    if not args.yes:
+        confirm = input(f"Place LIVE REAL-MONEY order for {qty} {symbol} (Rs {trade_val:,.2f}) on Groww? Type 'YES': ")
+        if confirm.strip() != "YES":
+            print("Aborted by user.")
+            return
+
+    order = Order(
+        symbol=symbol,
+        side=Side.BUY,
+        qty=qty,
+        price=entry_px,
+    )
+    print(f"Submitting LIVE CNC Delivery order to Groww: BUY {qty} {symbol}...")
+    resp = broker.place_order(order)
+    print("Groww Response:", resp)
+    print("Order execution completed successfully.")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="agent")
     p.add_argument("--config", default="config.yaml")
@@ -413,6 +630,16 @@ def main(argv: list[str] | None = None) -> None:
     gs = sub.add_parser("groww-status", help="Test Groww connection and check cash/holdings")
     gs.add_argument("--force", action="store_true", help="force regenerate a fresh TOTP access token")
 
+    ais = sub.add_parser("ai-status", help="Check AI Brain configuration and latest signal")
+
+    aic = sub.add_parser("ai-scan", help="Scan universe with AI Brain (Anthropic/DeepSeek/OpenAI/Gemini)")
+    aic.add_argument("--dry-run", action="store_true", help="extract candidates and format prompt without calling AI API")
+
+    ait = sub.add_parser("ai-trade", help="Execute trade based on latest AI Brain recommendation")
+    ait.add_argument("--live", action="store_true", help="execute LIVE real-money order on Groww (Delivery CNC)")
+    ait.add_argument("--dry-run", action="store_true", help="simulate order calculations without sending to Groww")
+    ait.add_argument("--yes", action="store_true", help="skip confirmation prompt in live mode")
+
     args = p.parse_args(argv)
     cfg = load_config(args.config)
     {
@@ -427,6 +654,9 @@ def main(argv: list[str] | None = None) -> None:
         "dashboard": cmd_dashboard,
         "kill-switch": cmd_kill_switch,
         "groww-status": cmd_groww_status,
+        "ai-status": cmd_ai_status,
+        "ai-scan": cmd_ai_scan,
+        "ai-trade": cmd_ai_trade,
     }[args.cmd](args, cfg)
 
 
