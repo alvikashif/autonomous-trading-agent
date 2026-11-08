@@ -129,3 +129,86 @@ def test_serve_refuses_public_bind_without_password(tmp_path, monkeypatch):
     monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
     with pytest.raises(SystemExit):
         serve(Config(), {}, host="0.0.0.0")
+
+
+def test_dashboard_login_page_session_and_custom_username(tmp_path):
+    paths = {"paper": str(_paper(tmp_path)), "monitor": str(tmp_path / "m.json"),
+             "screen": str(tmp_path / "s.csv"), "prices": str(tmp_path / "p.csv")}
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Config(), paths, {"localhost", "127.0.0.1"}, "s3cret", username="kashif"))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+
+    try:
+        # GET /login returns login page
+        code, body = _get(port, "/login")
+        assert code == 200 and "Alvi Quantitative Terminal" in body
+        assert "Sign In to Terminal" in body
+
+        # Unauthenticated GET / returns login page
+        code, body = _get(port, "/")
+        assert code == 200 and "Alvi Quantitative Terminal" in body
+
+        # Unauthenticated GET /api/summary returns 401
+        code, _ = _get(port, "/api/summary")
+        assert code == 401
+
+        # POST /api/login with wrong user returns 401
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/login",
+            data=json.dumps({"username": "admin", "password": "s3cret"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(req)
+            assert False, "should have failed with 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+
+        # POST /api/login with wrong password returns 401
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/login",
+            data=json.dumps({"username": "kashif", "password": "wrong"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(req)
+            assert False, "should have failed with 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+
+        # POST /api/login with correct credentials returns 200 and Set-Cookie
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/login",
+            data=json.dumps({"username": "kashif", "password": "s3cret"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req) as resp:
+            assert resp.status == 200
+            cookie_header = resp.headers.get("Set-Cookie")
+            assert cookie_header is not None and "agent_session=" in cookie_header
+            token_part = [p for p in cookie_header.split(";") if p.strip().startswith("agent_session=")][0]
+
+        # Access /api/summary using session cookie
+        code, body = _get(port, "/api/summary", headers={"Cookie": token_part})
+        assert code == 200
+        summary = json.loads(body)
+        assert summary["auth_user"] == "kashif"
+
+        # POST /api/logout clears cookie
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/logout", method="POST")
+        with urllib.request.urlopen(req) as resp:
+            assert resp.status == 200
+            logout_cookie = resp.headers.get("Set-Cookie")
+            assert logout_cookie is not None and "Max-Age=0" in logout_cookie
+
+        # Basic Auth: kashif:s3cret works, admin:s3cret fails
+        bad_auth = base64.b64encode(b"admin:s3cret").decode()
+        assert _get(port, "/api/summary", {"Authorization": f"Basic {bad_auth}"})[0] == 401
+        good_auth = base64.b64encode(b"kashif:s3cret").decode()
+        assert _get(port, "/api/summary", {"Authorization": f"Basic {good_auth}"})[0] == 200
+    finally:
+        srv.shutdown()
+
