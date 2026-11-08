@@ -199,7 +199,10 @@ def _call_claude(prompt: str, model: str, api_key: str) -> str:
     if not resp.ok:
         raise RuntimeError(f"Claude API Error {resp.status_code}: {resp.text}")
     data = resp.json()
-    return data["content"][0]["text"]
+    texts = [b["text"] for b in data.get("content", []) if b.get("type", "text") == "text" and "text" in b]
+    if texts:
+        return "\n".join(texts)
+    raise ValueError(f"No text blocks found in Claude response: {data}")
 
 
 def _call_deepseek(prompt: str, model: str, api_key: str) -> str:
@@ -257,7 +260,14 @@ def _call_gemini(prompt: str, model: str, api_key: str) -> str:
     if not resp.ok:
         raise RuntimeError(f"Gemini API Error {resp.status_code}: {resp.text}")
     data = resp.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    parts = []
+    for cand in data.get("candidates", []):
+        for part in cand.get("content", {}).get("parts", []):
+            if "text" in part:
+                parts.append(part["text"])
+    if parts:
+        return "\n".join(parts)
+    raise ValueError(f"No text parts returned from Gemini response: {data}")
 
 
 def query_llm(prompt: str, provider: str, model: str, api_key: str) -> str:
