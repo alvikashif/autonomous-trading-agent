@@ -415,6 +415,46 @@ def cmd_ai_status(args, cfg) -> None:
             print(f"Conviction Score      : {sel['confidence_score']:.1f} / 10.0")
             print(f"Thesis                : {sel['thesis']}")
 
+    # Print API Budget Tracker summary
+    try:
+        from .api_tracker import load_api_usage
+        usage = load_api_usage()
+        budget = usage.get("budget_limit_usd", 5.0)
+        spent = usage.get("total_spent_usd", 0.0)
+        rem = usage.get("remaining_usd", budget)
+        print(f"\nAI API Budget ($5 Limit): ${spent:.4f} spent / ${rem:.4f} remaining ({usage.get('total_calls', 0)} calls)")
+    except Exception:
+        pass
+
+
+def cmd_api_budget(args, cfg) -> None:
+    from .api_tracker import load_api_usage
+
+    usage = load_api_usage()
+    budget = usage.get("budget_limit_usd", 5.0)
+    spent = usage.get("total_spent_usd", 0.0)
+    rem = usage.get("remaining_usd", budget)
+    calls = usage.get("total_calls", 0)
+    pct_used = (spent / budget * 100) if budget > 0 else 0
+
+    print("=== AI API Budget & Usage Tracker ($5.00 Prepaid Limit) ===")
+    print(f"Total Budget    : ${budget:.2f}")
+    print(f"Total Spent     : ${spent:.4f} ({pct_used:.1f}%)")
+    print(f"Remaining Funds : ${rem:.4f} ({100 - pct_used:.1f}%)")
+    print(f"Total API Calls : {calls}")
+    print("\nBreakdown by Provider:")
+    providers = usage.get("providers", {})
+    if not providers:
+        print("  (No API calls recorded yet)")
+    for prov, data in providers.items():
+        print(f"  • {prov.upper():<10}: {data['calls']} calls | {data['input_tokens']:,} in | {data['output_tokens']:,} out | ${data['cost_usd']:.4f}")
+
+    recent = usage.get("recent_calls", [])
+    if recent:
+        print("\nRecent API Invocations:")
+        for c in recent[:5]:
+            print(f"  [{c['ts']}] {c['provider'].upper()} ({c['model']}): {c['input_tokens']} in, {c['output_tokens']} out => ${c['cost_usd']:.5f}")
+
 
 def cmd_ai_scan(args, cfg) -> None:
     from .ai_brain import (
@@ -711,6 +751,8 @@ def main(argv: list[str] | None = None) -> None:
     aie.add_argument("--current-price", type=float, help="current market price (optional)")
     aie.add_argument("--days-held", type=int, help="days held so far (optional)")
 
+    sub.add_parser("api-budget", help="Check AI API token usage and remaining $5 prepaid budget")
+
     args = p.parse_args(argv)
     cfg = load_config(args.config)
     {
@@ -729,6 +771,7 @@ def main(argv: list[str] | None = None) -> None:
         "ai-scan": cmd_ai_scan,
         "ai-trade": cmd_ai_trade,
         "ai-eval-exit": cmd_ai_eval_exit,
+        "api-budget": cmd_api_budget,
     }[args.cmd](args, cfg)
 
 

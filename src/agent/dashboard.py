@@ -96,6 +96,12 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
     except (OSError, ValueError, KeyError):
         pass
     mode_text = "LIVE (Groww API, CNC delivery)" if broker_mode == "live" else "PAPER (simulated, no real orders)"
+    try:
+        from .api_tracker import load_api_usage
+        api_budget = load_api_usage()
+    except Exception:
+        api_budget = {}
+
     return {
         "mode": mode_text,
         "broker_mode": broker_mode,
@@ -116,6 +122,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "swing": _read_json(swing_path) if swing_path else {},
         "kill_switch": get_kill_switch_status(kill_switch_path or "data/kill_switch.json"),
         "ai_signals": _read_json(ai_signals_path) if ai_signals_path else {},
+        "api_budget": api_budget,
     }
 
 
@@ -1296,7 +1303,7 @@ async function load() {
   }
 
   // Render AI Trading Brain
-  renderAI(d.ai_signals);
+  renderAI(d.ai_signals, d.api_budget);
 
   // Render Swing Sandbox
   swing(d.swing);
@@ -1322,7 +1329,7 @@ async function load() {
   }
 }
 
-function renderAI(ai) {
+function renderAI(ai, budget) {
   const c = document.getElementById('aicard');
   if (!ai || !ai.verdict) {
     c.style.display = 'none';
@@ -1345,6 +1352,30 @@ function renderAI(ai) {
     const sBox = el('div', 'mute', ai.decision_summary);
     sBox.style.width = '100%';
     sum.appendChild(sBox);
+  }
+
+  // API Budget Credit Meter
+  if (budget && budget.budget_limit_usd != null) {
+    const bSpent = '$' + (budget.total_spent_usd || 0).toFixed(4);
+    const bLimit = '$' + (budget.budget_limit_usd || 5.0).toFixed(2);
+    const bRem = '$' + (budget.remaining_usd != null ? budget.remaining_usd : 5.0).toFixed(4);
+    const pctUsed = Math.min(100, ((budget.total_spent_usd || 0) / (budget.budget_limit_usd || 5.0) * 100)).toFixed(1);
+    const bBox = el('div', '', '');
+    bBox.style.width = '100%';
+    bBox.style.marginTop = '10px';
+    bBox.style.padding = '8px 12px';
+    bBox.style.background = 'rgba(15, 23, 42, 0.7)';
+    bBox.style.border = '1px solid #1e293b';
+    bBox.style.borderRadius = '8px';
+    bBox.style.fontSize = '12px';
+    bBox.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:5px">` +
+      `<span>AI Budget ($5.00 limit): <strong>${bSpent}</strong> spent</span>` +
+      `<span style="color:#34d399">Remaining: <strong>${bRem}</strong> (${(100 - pctUsed).toFixed(1)}%)</span>` +
+      `</div>` +
+      `<div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden">` +
+      `<div style="height:100%;width:${pctUsed}%;background:#38bdf8"></div>` +
+      `</div>`;
+    sum.appendChild(bBox);
   }
 
   const tr = document.getElementById('aitrade');

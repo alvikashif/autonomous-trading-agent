@@ -309,3 +309,34 @@ def test_evaluate_take_profit_mocked(monkeypatch):
         assert res["revised_target_pct"] == 0.12
         assert res["trailing_stop_pct"] == 0.05
 
+
+def test_api_tracker(tmp_path):
+    from agent.api_tracker import calculate_cost, load_api_usage, record_api_call
+
+    usage_file = tmp_path / "api_usage.json"
+
+    # 1. Cost calculation
+    claude_cost = calculate_cost("claude", 1000, 500)
+    assert claude_cost == round((1000 / 1e6) * 3.0 + (500 / 1e6) * 15.0, 6)
+
+    gemini_cost = calculate_cost("gemini", 1000, 500)
+    assert gemini_cost == round((1000 / 1e6) * 0.075 + (500 / 1e6) * 0.30, 6)
+
+    # 2. Record API call
+    state = record_api_call("claude", "claude-sonnet-5-5", 1000, 500, usage_path=usage_file, default_budget=5.0)
+    assert state["total_calls"] == 1
+    assert state["total_spent_usd"] == round(claude_cost, 4)
+    assert state["remaining_usd"] == round(5.0 - claude_cost, 4)
+    assert state["providers"]["claude"]["calls"] == 1
+
+    # 3. Record Gemini call
+    state2 = record_api_call("gemini", "gemini-3.5-flash", 2000, 800, usage_path=usage_file, default_budget=5.0)
+    assert state2["total_calls"] == 2
+    assert "gemini" in state2["providers"]
+
+    # 4. Load persisted state
+    loaded = load_api_usage(usage_file, default_budget=5.0)
+    assert loaded["total_calls"] == 2
+    assert loaded["remaining_usd"] == state2["remaining_usd"]
+
+

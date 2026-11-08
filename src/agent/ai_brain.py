@@ -200,6 +200,17 @@ def _call_claude(prompt: str, model: str, api_key: str) -> str:
     if not resp.ok:
         raise RuntimeError(f"Claude API Error {resp.status_code}: {resp.text}")
     data = resp.json()
+
+    # Track usage & cost
+    usage = data.get("usage", {})
+    in_tok = usage.get("input_tokens", 0)
+    out_tok = usage.get("output_tokens", 0)
+    try:
+        from .api_tracker import record_api_call
+        record_api_call("claude", active_model, in_tok, out_tok)
+    except Exception:
+        pass
+
     texts = [b["text"] for b in data.get("content", []) if b.get("type", "text") == "text" and "text" in b]
     if texts:
         return "\n".join(texts)
@@ -261,6 +272,17 @@ def _call_gemini(prompt: str, model: str, api_key: str) -> str:
     if not resp.ok:
         raise RuntimeError(f"Gemini API Error {resp.status_code}: {resp.text}")
     data = resp.json()
+
+    # Track usage & cost
+    usage = data.get("usageMetadata", {})
+    in_tok = usage.get("promptTokenCount", 0)
+    out_tok = usage.get("candidatesTokenCount", 0)
+    try:
+        from .api_tracker import record_api_call
+        record_api_call("gemini", active_model, in_tok, out_tok)
+    except Exception:
+        pass
+
     parts = []
     for cand in data.get("candidates", []):
         for part in cand.get("content", {}).get("parts", []):
