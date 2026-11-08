@@ -23,6 +23,7 @@ class UniverseConfig:
     swing_status_json: str = "data/swing_status.json"
     ai_signals_json: str = "data/ai_signals.json"
     kill_switch_json: str = "data/kill_switch.json"
+    notifications_json: str = "data/notifications.json"
     excluded_symbols: tuple[str, ...] = ()
 
 

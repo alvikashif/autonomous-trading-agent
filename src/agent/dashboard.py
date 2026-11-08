@@ -57,6 +57,14 @@ def _last_closes(prices_cache: str, symbols: list[str]) -> dict[str, float]:
         return {}
 
 
+def _get_recent_notifications(path: str = "data/notifications.json") -> list[dict]:
+    try:
+        from .notify import load_notifications
+        return load_notifications(path)[:20]
+    except Exception:
+        return []
+
+
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
                   rebalance_months: int, swing_path: str | None = None,
                   kill_switch_path: str | None = None, broker_mode: str = "paper",
@@ -123,6 +131,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "kill_switch": get_kill_switch_status(kill_switch_path or "data/kill_switch.json"),
         "ai_signals": _read_json(ai_signals_path) if ai_signals_path else {},
         "api_budget": api_budget,
+        "notifications": _get_recent_notifications(),
     }
 
 
@@ -167,11 +176,140 @@ def extract_cookie(header: str, name: str) -> str | None:
     return None
 
 
+
+MANIFEST_JSON = """{
+  "name": "Alvi Quantitative Terminal",
+  "short_name": "Alvi Terminal",
+  "description": "Autonomous Shariah-Compliant Quantitative Trading Terminal & Execution Engine",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#030712",
+  "theme_color": "#030712",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["finance", "productivity"]
+}"""
+
+SERVICE_WORKER_JS = """const CACHE_NAME = 'alvi-terminal-v4';
+const STATIC_SHELL = [
+  '/manifest.json',
+  '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_SHELL)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+    )).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  // Always fetch HTML documents and dynamic API requests straight from network with cookies
+  if (event.request.mode === 'navigate' || url.pathname.startsWith('/api/') || url.pathname === '/' || url.pathname === '/login') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  // Stale-while-revalidate for static icons and manifest
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      const fetchPromise = fetch(event.request).then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200) {
+          const toCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, toCache));
+        }
+        return networkResponse;
+      }).catch(() => cached);
+      return cached || fetchPromise;
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});"""
+
+FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </linearGradient>
+    <linearGradient id="em" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#064e3b"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bg)" stroke="#10b981" stroke-width="14" stroke-opacity="0.85"/>
+  <circle cx="256" cy="256" r="145" fill="url(#em)" stroke="#34d399" stroke-width="8" filter="url(#glow)"/>
+  <rect x="238" y="210" width="36" height="135" rx="6" fill="#34d399"/>
+  <polygon points="256,155 185,240 327,240" fill="#38bdf8"/>
+</svg>"""
+
+ICON_192_B64 = "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"
+ICON_512_B64 = "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"
+ICON_192_PNG_BYTES = base64.b64decode(ICON_192_B64)
+ICON_512_PNG_BYTES = base64.b64decode(ICON_512_B64)
+
+
 LOGIN_PAGE = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#030712">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Alvi Terminal">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Sign In · Shariah Quantitative Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -202,8 +340,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   -webkit-font-smoothing: antialiased;
+}
+@media (max-width: 480px) {
+  .login-wrap { max-width: 100%; }
+  .login-card { padding: 24px 20px !important; border-radius: 16px !important; }
+  h1 { font-size: 19px !important; }
+  .form-group input { font-size: 16px !important; }
 }
 .login-wrap {
   width: 100%;
@@ -396,6 +540,358 @@ label {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* PWA Install Banner & Buttons */
+.pwa-banner {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 105;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.pwa-banner-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pwa-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pwa-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #022c22;
+  border: 1px solid #10b981;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-install-pwa {
+  background: #10b981;
+  color: #022c22;
+  font-weight: 700;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+.btn-install-pwa:hover {
+  background: #34d399;
+  color: #fff;
+}
+.btn-dismiss-pwa {
+  background: transparent;
+  color: var(--mute);
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+.btn-header-install {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-header-install:hover {
+  background: #10b981;
+  color: #022c22;
+}
+.ios-hint {
+  display: none;
+  background: #0c1527;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #93c5fd;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  margin-bottom: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Mobile & Tablet Responsive Media Queries */
+@media (max-width: 768px) {
+  .topbar {
+    padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  }
+  .topbar-content {
+    gap: 8px;
+  }
+  .brand-title {
+    font-size: 14px;
+  }
+  .brand-subtitle {
+    display: none;
+  }
+  .status-cluster {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .actions-group {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .actions-group .user-pill {
+    padding: 5px 8px;
+    font-size: 11px;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .btn-kill {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .container {
+    padding: 0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
+    margin-top: 12px;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 12px;
+  }
+  .kpi-card {
+    padding: 12px 12px;
+    border-radius: 12px;
+  }
+  .kpi-label {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .kpi-value {
+    font-size: 18px;
+  }
+  .kpi-sub {
+    font-size: 10px;
+  }
+  .card {
+    padding: 14px 14px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+  .card-header {
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 13px;
+  }
+  .trade-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .trade-symbol {
+    font-size: 18px;
+  }
+  .trade-metrics {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .budget-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -14px;
+    padding: 0 14px;
+    scrollbar-width: thin;
+  }
+  table {
+    min-width: 550px;
+  }
+  th, td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .halt-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .btn-resume {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .kpi-card {
+    padding: 10px 10px;
+  }
+  .kpi-value {
+    font-size: 16px;
+  }
+  .pill {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+  .btn-kill {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
+
+
+/* Toast & Notification System */
+.toast-container {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(56, 189, 248, 0.15);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transform: translateX(120%);
+  animation: slideInToast 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  position: relative;
+  overflow: hidden;
+}
+@keyframes slideInToast {
+  to { transform: translateX(0); }
+}
+.toast.toast-fadeout {
+  animation: fadeOutToast 0.3s ease forwards;
+}
+@keyframes fadeOutToast {
+  to { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}
+.toast-buy {
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.25);
+}
+.toast-sell, .toast-stop {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.25);
+}
+.toast-profit {
+  border-color: rgba(52, 211, 153, 0.7);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(52, 211, 153, 0.3);
+}
+.toast-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.toast-content {
+  flex: 1;
+  min-width: 0;
+}
+.toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+.toast-body {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.toast-time {
+  font-size: 10px;
+  color: var(--mute);
+  margin-top: 4px;
+}
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--mute);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.toast-close:hover {
+  color: #fff;
+}
+.btn-notif {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0f172a;
+  color: var(--mute);
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-notif:hover {
+  color: #fff;
+  border-color: #38bdf8;
+}
+.btn-notif.active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
 </style>
 </head>
 <body>
@@ -507,15 +1003,29 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 </script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
 </body>
 </html>"""
-
 
 PAGE = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#030712">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Alvi Terminal">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Alvi Quantitative Terminal · Shariah Trading</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -550,7 +1060,7 @@ body {
   color: var(--ink);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
-  padding-bottom: 40px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
 }
 .mono { font-family: 'JetBrains Mono', monospace; }
@@ -558,13 +1068,14 @@ body {
 
 /* Top Navigation Bar */
 .topbar {
-  background: rgba(11, 17, 32, 0.85);
+  background: rgba(11, 17, 32, 0.9);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   z-index: 100;
-  padding: 10px 20px;
+  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
 }
 .topbar-content {
   max-width: 1200px;
@@ -984,9 +1495,383 @@ footer {
   color: var(--subtle);
   margin-top: 32px;
 }
+
+/* PWA Install Banner & Buttons */
+.pwa-banner {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 105;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.pwa-banner-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pwa-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pwa-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #022c22;
+  border: 1px solid #10b981;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-install-pwa {
+  background: #10b981;
+  color: #022c22;
+  font-weight: 700;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+.btn-install-pwa:hover {
+  background: #34d399;
+  color: #fff;
+}
+.btn-dismiss-pwa {
+  background: transparent;
+  color: var(--mute);
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+.btn-header-install {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-header-install:hover {
+  background: #10b981;
+  color: #022c22;
+}
+.ios-hint {
+  display: none;
+  background: #0c1527;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #93c5fd;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  margin-bottom: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Mobile & Tablet Responsive Media Queries */
+@media (max-width: 768px) {
+  .topbar {
+    padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  }
+  .topbar-content {
+    gap: 8px;
+  }
+  .brand-title {
+    font-size: 14px;
+  }
+  .brand-subtitle {
+    display: none;
+  }
+  .status-cluster {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .actions-group {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .actions-group .user-pill {
+    padding: 5px 8px;
+    font-size: 11px;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .btn-kill {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .container {
+    padding: 0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
+    margin-top: 12px;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 12px;
+  }
+  .kpi-card {
+    padding: 12px 12px;
+    border-radius: 12px;
+  }
+  .kpi-label {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .kpi-value {
+    font-size: 18px;
+  }
+  .kpi-sub {
+    font-size: 10px;
+  }
+  .card {
+    padding: 14px 14px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+  .card-header {
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 13px;
+  }
+  .trade-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .trade-symbol {
+    font-size: 18px;
+  }
+  .trade-metrics {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .budget-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -14px;
+    padding: 0 14px;
+    scrollbar-width: thin;
+  }
+  table {
+    min-width: 550px;
+  }
+  th, td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .halt-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .btn-resume {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .kpi-card {
+    padding: 10px 10px;
+  }
+  .kpi-value {
+    font-size: 16px;
+  }
+  .pill {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+  .btn-kill {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
+
+
+/* Toast & Notification System */
+.toast-container {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(56, 189, 248, 0.15);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transform: translateX(120%);
+  animation: slideInToast 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  position: relative;
+  overflow: hidden;
+}
+@keyframes slideInToast {
+  to { transform: translateX(0); }
+}
+.toast.toast-fadeout {
+  animation: fadeOutToast 0.3s ease forwards;
+}
+@keyframes fadeOutToast {
+  to { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}
+.toast-buy {
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.25);
+}
+.toast-sell, .toast-stop {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.25);
+}
+.toast-profit {
+  border-color: rgba(52, 211, 153, 0.7);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(52, 211, 153, 0.3);
+}
+.toast-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.toast-content {
+  flex: 1;
+  min-width: 0;
+}
+.toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+.toast-body {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.toast-time {
+  font-size: 10px;
+  color: var(--mute);
+  margin-top: 4px;
+}
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--mute);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.toast-close:hover {
+  color: #fff;
+}
+.btn-notif {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0f172a;
+  color: var(--mute);
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-notif:hover {
+  color: #fff;
+  border-color: #38bdf8;
+}
+.btn-notif.active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
 </style>
 </head>
 <body>
+
+<div id="toastContainer" class="toast-container"></div>
+<div id="pwaBanner" class="pwa-banner">
+  <div class="pwa-banner-content">
+    <div class="pwa-info">
+      <div class="pwa-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div>
+        <strong style="color:#fff">Install Alvi Terminal</strong>
+        <div style="font-size:11px;color:var(--mute)">Add to Home screen for full-screen autonomous mobile trading</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="pwaInstallBtn" class="btn-install-pwa" onclick="triggerPwaInstall()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Install App</span>
+      </button>
+      <button id="pwaDismissBtn" class="btn-dismiss-pwa" onclick="dismissPwaBanner()">&times;</button>
+    </div>
+  </div>
+</div>
 
 <div class="topbar">
   <div class="topbar-content">
@@ -1015,6 +1900,14 @@ footer {
     </div>
 
     <div class="actions-group">
+      <button id="btnNotif" class="btn-notif" onclick="toggleNotifications()" title="Web & App Trade Notifications">
+        <span id="notifBell">🔔</span>
+        <span id="notifStatusText">Alerts</span>
+      </button>
+      <button id="btnHeaderInstall" class="btn-header-install" onclick="triggerPwaInstall()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Install App</span>
+      </button>
       <button class="btn-kill" id="btn-kill" onclick="triggerKill()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>KILL SWITCH</span>
@@ -1031,6 +1924,14 @@ footer {
 </div>
 
 <div class="container">
+  <!-- iOS Install Hint -->
+  <div id="iosHint" class="ios-hint">
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      <span>Install on iPhone: Tap <strong>Share</strong> (square with arrow) &rarr; <strong>Add to Home Screen</strong></span>
+    </div>
+    <button onclick="dismissIosHint()" style="background:none;border:none;color:#93c5fd;font-size:16px;cursor:pointer">&times;</button>
+  </div>
   <!-- Emergency Halt Active Banner -->
   <div id="killbanner" class="halt-banner">
     <div class="halt-content">
@@ -1180,6 +2081,150 @@ async function logout() {
   window.location.href = '/login';
 }
 
+
+// Web & Mobile App Notifications System
+let notificationsEnabled = localStorage.getItem('notifications_active') === 'true';
+const seenTradeKeys = new Set();
+const seenAlertKeys = new Set();
+const seenNotifIds = new Set();
+let isFirstLoad = true;
+
+function playChime(type = 'buy') {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const now = ctx.currentTime;
+    if (type === 'buy') {
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.setValueAtTime(880.00, now + 0.12); // A5
+    } else if (type === 'sell' || type === 'stop') {
+      osc.frequency.setValueAtTime(880.00, now); // A5
+      osc.frequency.setValueAtTime(587.33, now + 0.12); // D5
+    } else {
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.setValueAtTime(659.25, now + 0.12); // E5
+    }
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch (e) {}
+}
+
+function showToast(title, message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const icons = {
+    buy: '🟢',
+    sell: '🔴',
+    stop: '🚨',
+    profit: '💰',
+    alert: '⚠️',
+    info: '📢',
+    test: '🧪'
+  };
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type] || '📢'}</div>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-body">${message}</div>
+      <div class="toast-time">Just now · Live Alert</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add('toast-fadeout');
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 7000);
+}
+
+function showAppNotification(title, body, type = 'info') {
+  playChime(type);
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate([150, 60, 150]); } catch (e) {}
+  }
+  showToast(title, body, type);
+
+  // Send OS-level Web / App Push Notification
+  if ('Notification' in window && Notification.permission === 'granted') {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.showNotification(title, {
+          body: body,
+          icon: '/icon-192.png',
+          badge: '/favicon.svg',
+          tag: 'trade-' + Date.now(),
+          vibrate: [200, 100, 200]
+        });
+      }).catch(() => {
+        try { new Notification(title, { body: body, icon: '/icon-192.png' }); } catch (e) {}
+      });
+    } else {
+      try {
+        new Notification(title, { body: body, icon: '/icon-192.png' });
+      } catch (e) {}
+    }
+  }
+}
+
+async function toggleNotifications() {
+  if (!('Notification' in window)) {
+    showToast('Notifications Unsupported', 'Your browser does not support Web Notifications.', 'alert');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    await testNotification();
+  } else if (Notification.permission === 'denied') {
+    alert("Notifications are currently blocked. Please open browser settings to allow notifications.");
+  } else {
+    const perm = await Notification.requestPermission();
+    updateNotifBtnState();
+    if (perm === 'granted') {
+      localStorage.setItem('notifications_active', 'true');
+      showAppNotification('Notifications Activated 🔔', 'You will receive instant alerts for every trade and transaction.', 'test');
+    }
+  }
+}
+
+async function testNotification() {
+  try {
+    const res = await fetch('/api/notifications/test', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showAppNotification('🧪 Live Trade Notification Test', 'Groww CNC trade notifications and alerts are fully active!', 'test');
+    }
+  } catch (e) {
+    showAppNotification('🧪 Trade Notification Test', 'Web & App notifications are active and ready!', 'test');
+  }
+}
+
+function updateNotifBtnState() {
+  const btn = document.getElementById('btnNotif');
+  const txt = document.getElementById('notifStatusText');
+  const bell = document.getElementById('notifBell');
+  if (!btn || !txt) return;
+  if ('Notification' in window && Notification.permission === 'granted') {
+    btn.className = 'btn-notif active';
+    txt.textContent = 'Alerts ON';
+    if (bell) bell.textContent = '🔔';
+  } else {
+    btn.className = 'btn-notif';
+    txt.textContent = 'Enable Alerts';
+    if (bell) bell.textContent = '🔕';
+  }
+}
+
 async function load() {
   let d;
   try {
@@ -1192,6 +2237,54 @@ async function load() {
   } catch (e) {
     document.getElementById('sub').textContent = 'Cannot reach execution agent';
     return;
+  }
+
+  updateNotifBtnState();
+
+  // Real-time Trade & Transaction Notification Dispatcher
+  if (isFirstLoad) {
+    (d.trades || []).forEach(t => seenTradeKeys.add(`${t.ts}_${t.symbol}_${t.side}_${t.qty}`));
+    (d.monitor?.alerts || []).forEach(a => seenAlertKeys.add(`${a.ts}_${a.kind}_${a.symbol}`));
+    (d.notifications || []).forEach(n => seenNotifIds.add(n.id));
+    isFirstLoad = false;
+  } else {
+    // 1. Newly executed trade orders
+    (d.trades || []).forEach(t => {
+      const key = `${t.ts}_${t.symbol}_${t.side}_${t.qty}`;
+      if (!seenTradeKeys.has(key)) {
+        seenTradeKeys.add(key);
+        const isBuy = (t.side || '').toUpperCase() === 'BUY';
+        const title = `${isBuy ? '🟢 BUY EXECUTED' : '🔴 SELL EXECUTED'}: ${t.qty} ${t.symbol}`;
+        const body = `${t.side} ${t.qty} shares @ ₹${t.fill_price ? Number(t.fill_price).toFixed(2) : '–'} (Total: ₹${((t.qty||0)*(t.fill_price||0)).toLocaleString('en-IN')})`;
+        showAppNotification(title, body, isBuy ? 'buy' : 'sell');
+      }
+    });
+
+    // 2. Newly triggered monitor alerts (stop-loss, profit taken)
+    (d.monitor?.alerts || []).forEach(a => {
+      const key = `${a.ts}_${a.kind}_${a.symbol}`;
+      if (!seenAlertKeys.has(key)) {
+        seenAlertKeys.add(key);
+        let type = 'alert';
+        let title = `⚠️ ALERT: ${a.symbol}`;
+        if (a.kind === 'AI_STOP_EXECUTED' || a.kind === 'STOP_SOLD') {
+          type = 'stop';
+          title = `🚨 STOP LOSS SOLD: ${a.symbol}`;
+        } else if (a.kind === 'AI_PROFIT_TAKEN') {
+          type = 'profit';
+          title = `💰 PROFIT TAKEN: ${a.symbol}`;
+        }
+        showAppNotification(title, a.detail || a.kind, type);
+      }
+    });
+
+    // 3. New backend notifications
+    (d.notifications || []).forEach(n => {
+      if (!seenNotifIds.has(n.id)) {
+        seenNotifIds.add(n.id);
+        showAppNotification(n.title, n.message, n.type || 'info');
+      }
+    });
   }
 
   // Update Auth User
@@ -1385,7 +2478,7 @@ function renderAI(ai, budget) {
       <div style="height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-bottom:10px">
         <div style="height:100%;width:${pctUsed}%;background:linear-gradient(90deg, #38bdf8, #818cf8)"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div class="budget-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div style="background:rgba(2, 6, 23, 0.6);border:1px solid ${claudeExhausted ? '#ef4444' : '#1e293b'};border-radius:6px;padding:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <span style="font-weight:600;color:#cbd5e1">Claude Sonnet 5.5</span>
@@ -1501,6 +2594,72 @@ function swing(s) {
   ]);
 }
 
+
+// PWA Installation & Service Worker Handler
+let deferredPrompt = null;
+const pwaBanner = document.getElementById('pwaBanner');
+const headerInstallBtn = document.getElementById('btnHeaderInstall');
+const iosHint = document.getElementById('iosHint');
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone) {
+    if (headerInstallBtn) headerInstallBtn.style.display = 'inline-flex';
+    if (pwaBanner && !sessionStorage.getItem('pwa_dismissed')) {
+      pwaBanner.style.display = 'flex';
+    }
+  }
+});
+
+async function triggerPwaInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      if (pwaBanner) pwaBanner.style.display = 'none';
+      if (headerInstallBtn) headerInstallBtn.style.display = 'none';
+    }
+    deferredPrompt = null;
+  } else {
+    const isIosDevice = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    if (isIosDevice) {
+      alert("To install on iOS: Tap the Share icon at the bottom of Safari, then tap 'Add to Home Screen'.");
+    } else {
+      alert("To install this app: Tap your browser menu and select 'Install app' or 'Add to Home screen'.");
+    }
+  }
+}
+
+function dismissPwaBanner() {
+  if (pwaBanner) pwaBanner.style.display = 'none';
+  sessionStorage.setItem('pwa_dismissed', 'true');
+}
+
+function dismissIosHint() {
+  if (iosHint) iosHint.style.display = 'none';
+  sessionStorage.setItem('ios_hint_dismissed', 'true');
+}
+
+window.addEventListener('appinstalled', () => {
+  if (pwaBanner) pwaBanner.style.display = 'none';
+  if (headerInstallBtn) headerInstallBtn.style.display = 'none';
+  if (iosHint) iosHint.style.display = 'none';
+  deferredPrompt = null;
+});
+
+const isIosDevice = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+if (isIosDevice && !isStandalone && iosHint && !sessionStorage.getItem('ios_hint_dismissed')) {
+  iosHint.style.display = 'flex';
+}
+
 load();
 setInterval(load, 15000);
 </script>
@@ -1527,7 +2686,7 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com 'self'; script-src 'unsafe-inline'")
+            self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com 'self'; script-src 'unsafe-inline' 'self'; worker-src 'self' blob:; img-src 'self' data:; manifest-src 'self'")
             for k, v in (headers or {}).items():
                 self.send_header(k, v)
             self.end_headers()
@@ -1579,6 +2738,22 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
 
             path = self.path.split("?")[0]
             auth_user = self._get_auth_user()
+
+            # PWA Manifest, Service Worker & Icons (Publicly available for mobile install)
+            if path in ("/manifest.json", "/manifest.webmanifest"):
+                return self._respond(200, MANIFEST_JSON.encode(), "application/manifest+json")
+
+            if path == "/sw.js":
+                return self._respond(200, SERVICE_WORKER_JS.encode(), "application/javascript")
+
+            if path == "/favicon.svg":
+                return self._respond(200, FAVICON_SVG.encode(), "image/svg+xml")
+
+            if path in ("/icon-192.png", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"):
+                return self._respond(200, ICON_192_PNG_BYTES, "image/png")
+
+            if path == "/icon-512.png":
+                return self._respond(200, ICON_512_PNG_BYTES, "image/png")
 
             # Handle /login
             if path == "/login":
@@ -1687,6 +2862,15 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
             elif path == "/api/kill-switch/reset":
                 status = reset_kill_switch(ks_path)
                 data = json.dumps(status).encode()
+            elif path == "/api/notifications/test":
+                from .notify import dispatch_notification
+                notif = dispatch_notification(
+                    event_type="test",
+                    title="TEST NOTIFICATION",
+                    message="Live web & mobile app trade notifications are active!",
+                    details={"mode": "LIVE", "test": True},
+                )
+                data = json.dumps({"ok": True, "notification": notif}).encode()
             else:
                 return self._deny(405, "read-only endpoint or unknown action")
 

@@ -106,6 +106,27 @@ def test_dashboard_serves_summary_and_is_read_only(tmp_path):
         assert _get(port)[0] == 200
         assert _get(port, "/nope")[0] == 404
         assert _get(port, "/api/summary", method="POST")[0] == 405
+
+        # PWA endpoints are served publicly
+        code, manifest = _get(port, "/manifest.json")
+        assert code == 200 and "Alvi Quantitative Terminal" in manifest
+        assert "standalone" in manifest
+
+        code, sw = _get(port, "/sw.js")
+        assert code == 200 and "CACHE_NAME" in sw
+
+        code, svg = _get(port, "/favicon.svg")
+        assert code == 200 and "<svg" in svg
+
+        req192 = urllib.request.Request(f"http://127.0.0.1:{port}/icon-192.png")
+        with urllib.request.urlopen(req192) as r:
+            assert r.status == 200 and r.headers.get("Content-Type") == "image/png"
+            assert len(r.read()) > 500
+
+        req512 = urllib.request.Request(f"http://127.0.0.1:{port}/icon-512.png")
+        with urllib.request.urlopen(req512) as r:
+            assert r.status == 200 and r.headers.get("Content-Type") == "image/png"
+            assert len(r.read()) > 1000
     finally:
         srv.shutdown()
 

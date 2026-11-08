@@ -661,6 +661,17 @@ def cmd_ai_trade(args, cfg) -> None:
     resp = broker.place_order(order)
     print("Groww Response:", resp)
     print("Order execution completed successfully.")
+    try:
+        from .notify import dispatch_notification
+        dispatch_notification(
+            event_type="buy",
+            title=f"LIVE BUY: {qty} {symbol}",
+            message=f"Groww CNC order submitted for {qty} shares of {symbol} @ Rs {entry_px:,.2f} (Total: Rs {trade_val:,.2f})",
+            details={"symbol": symbol, "qty": qty, "price": entry_px, "trade_val": trade_val, "mode": "LIVE"},
+            path=cfg.universe.notifications_json,
+        )
+    except Exception as e:
+        print(f"Notification dispatch error: {e}")
 
 
 def cmd_ai_eval_exit(args, cfg) -> None:

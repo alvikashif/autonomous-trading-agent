@@ -214,6 +214,17 @@ def run_once(
                             "symbol": ai_symbol,
                             "detail": f"Sold {ai_qty} shares @ Rs {cur_px:.2f} ({'LIVE' if live_mode else 'PAPER'})",
                         })
+                        try:
+                            from .notify import dispatch_notification
+                            dispatch_notification(
+                                event_type="stop_loss",
+                                title=f"STOP LOSS EXECUTED: {ai_symbol}",
+                                message=f"Position breached -4.0% stop. Sold {ai_qty} shares @ Rs {cur_px:.2f} (Loss: {(cur_px/entry_px-1)*100:.1f}%) [{'LIVE' if live_mode else 'PAPER'}]",
+                                details={"symbol": ai_symbol, "qty": ai_qty, "price": cur_px, "pnl_pct": (cur_px/entry_px-1)},
+                                path=status_file.parent / "notifications.json",
+                            )
+                        except Exception as e:
+                            logger.debug(f"Notification error: {e}")
 
             # 2. Mid-Day Profit Target Reached
             elif cur_px >= target_px:
@@ -282,6 +293,17 @@ def run_once(
                                 "symbol": ai_symbol,
                                 "detail": f"Took profit: Sold {ai_qty} shares @ Rs {cur_px:.2f} (+{(cur_px/entry_px-1)*100:.1f}%) ({'LIVE' if live_mode else 'PAPER'})",
                             })
+                            try:
+                                from .notify import dispatch_notification
+                                dispatch_notification(
+                                    event_type="take_profit",
+                                    title=f"PROFIT TAKEN: {ai_symbol}",
+                                    message=f"Target reached (+{(cur_px/entry_px-1)*100:.1f}%). Sold {ai_qty} shares @ Rs {cur_px:.2f} [{'LIVE' if live_mode else 'PAPER'}]",
+                                    details={"symbol": ai_symbol, "qty": ai_qty, "price": cur_px, "gain_pct": (cur_px/entry_px-1)},
+                                    path=status_file.parent / "notifications.json",
+                                )
+                            except Exception as e:
+                                logger.debug(f"Notification error: {e}")
 
     stamp = now.isoformat(timespec="seconds")
     for ev in new_events:
@@ -289,6 +311,29 @@ def run_once(
         key = (ev.kind, ev.symbol, stamp[:10])
         if not any((a.get("kind"), a.get("symbol"), str(a.get("ts", ""))[:10]) == key for a in alerts):
             alerts.append({"ts": stamp, "kind": ev.kind, "symbol": ev.symbol, "detail": ev.detail})
+
+    # In Live Mode, periodically sync actual broker cash and positions to shared paper_path
+    live_cash_val = None
+    if live_mode and broker:
+        try:
+            if hasattr(broker, "cash"):
+                live_cash_val = float(broker.cash())
+            live_pos = broker.positions() if hasattr(broker, "positions") else None
+            p_data = _load(paper_path)
+            if p_data:
+                updated_p = False
+                if live_cash_val is not None and abs(p_data.get("cash", 0.0) - live_cash_val) > 0.01:
+                    p_data["cash"] = live_cash_val
+                    updated_p = True
+                if live_pos is not None:
+                    clean_pos = {k: int(v) for k, v in live_pos.items() if int(v) > 0}
+                    if p_data.get("positions") != clean_pos:
+                        p_data["positions"] = clean_pos
+                        updated_p = True
+                if updated_p:
+                    _save(paper_path, p_data)
+        except Exception as e:
+            logger.debug(f"Live broker state sync failed: {e}")
 
     status = {
         "heartbeat": stamp,
@@ -299,6 +344,7 @@ def run_once(
         "stop_pct": stop_pct,
         "act": act,
         "live_mode": live_mode,
+        "live_cash": live_cash_val,
         "ai_monitored": bool(ai_symbol and ai_qty > 0),
         "alerts": alerts[-50:],
     }
