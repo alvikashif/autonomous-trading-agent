@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -192,7 +193,7 @@ def _call_claude(prompt: str, model: str, api_key: str) -> str:
     }
     payload = {
         "model": active_model,
-        "max_tokens": 2048,
+        "max_tokens": 4096,
         "messages": [{"role": "user", "content": prompt}],
     }
     resp = requests.post(url, headers=headers, json=payload, timeout=60)
@@ -316,7 +317,15 @@ def clean_json_response(raw: str) -> dict[str, Any]:
     s = text.find("{")
     e = text.rfind("}")
     if s != -1 and e != -1 and e > s:
-        return json.loads(text[s : e + 1])
+        candidate = text[s : e + 1]
+        try:
+            return json.loads(candidate)
+        except Exception:
+            cleaned = re.sub(r',\s*([\]}])', r'\1', candidate)
+            try:
+                return json.loads(cleaned)
+            except Exception:
+                pass
 
     raise ValueError(f"Could not parse valid JSON from AI response: {text[:200]}...")
 
