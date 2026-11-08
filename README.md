@@ -48,6 +48,13 @@ cut returns badly (10.8% and 16.8% a year vs 21.9% without), 20-25% were roughly
 smaller worst drop, so it stays off. `agent dashboard` is a read-only page on http://127.0.0.1:8765.
 Remote access and 24/7 setup: see REMOTE_ACCESS.md.
 
+## Swing sandbox (short-term, PAPER, experimental)
+`agent swing-backtest` tests a fixed rule (close above 20-day high and 50-day average, +8% target, -4% stop, 10-day limit,
+2 slots) against a random-entry baseline with the same exits. Results since 2019: Rs 5k start is wiped out by costs
+(about Rs 35 fixed per round trip); Rs 50k start beats the random band but with survivorship bias. `agent swing-run` replays the
+rule from `swing.start_date` on fresh prices (no extra state, deterministic), writes `data/swing_status.json`, and the
+dashboard shows it in its own panel. The jobs container runs it daily after `paper-run`. No broker is involved.
+
 ## Layout
 - `shariah.py` screens; `strategy.py` momentum+quality+trend; `portfolio.py` weights to orders;
   `risk.py` veto layer; `paper.py` simulated broker; `backtest.py`; `costs.py` Indian delivery charges.

@@ -50,3 +50,7 @@ costs:                                      # approximate Groww delivery charges
   gst_pct: 0.18
   dp_charge_sell: 16.5
   slippage_pct: 0.001
+
+swing:            # short-term PAPER sandbox (no real orders). Backtest: loses to costs at Rs 5k, see README
+  start_date: "2026-11-09"
+  capital: 50000

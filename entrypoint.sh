@@ -24,6 +24,7 @@ case "${AGENT_ROLE:-}" in
       sleep $((target - now))
       if [ "$(date +%u)" -le 5 ]; then
         agent paper-run --deposit || echo "paper-run failed: $?"
+        agent swing-run || echo "swing-run failed: $?"
       fi
     done
     ;;

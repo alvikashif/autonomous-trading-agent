@@ -178,6 +178,42 @@ def cmd_swing_backtest(args, cfg) -> None:
     print("If breakout is not clearly above the random band, the entry signal adds nothing. Survivorship bias applies.")
 
 
+def cmd_swing_run(args, cfg) -> None:
+    """Forward paper run: replay the fixed rule from swing.start_date on fresh prices, write a status file."""
+    import json
+    import os
+    import tempfile
+
+    from .swing import params_from_config, run_swing, swing_status
+
+    sc = cfg.swing
+    elig = _eligible_report(cfg.universe.screen_report_csv)
+    symbols = elig["symbol"].tolist()
+    start = (pd.Timestamp(sc.start_date) - timedelta(days=250)).date().isoformat()  # warm-up for the averages
+    prices = fetch_prices(symbols + [cfg.strategy.benchmark], start, cache_path=cfg.universe.prices_cache_csv, refresh=True)
+    bench = prices[cfg.strategy.benchmark]
+    stocks = prices.drop(columns=[cfg.strategy.benchmark])
+    if stocks.index[-1] < pd.Timestamp(sc.start_date):
+        status = {"mode": "PAPER sandbox (simulated)", "start_date": sc.start_date, "capital": sc.capital,
+                  "waiting": True, "holdings": [], "recent": [], "pending_buy": []}
+    else:
+        res = run_swing(stocks, symbols, params_from_config(sc), cfg.costs, "breakout", start=sc.start_date)
+        status = swing_status(res, sc, bench)
+    if args.dry_run:
+        print(json.dumps(status, indent=1, default=str)[:1500])
+        return
+    path = cfg.universe.swing_status_json
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+    with os.fdopen(fd, "w") as f:
+        json.dump(status, f, default=str)
+    os.replace(tmp, path)
+    if status.get("waiting"):
+        print(f"swing sandbox starts {sc.start_date}; no data yet")
+    else:
+        print(f"swing as of {status['as_of']}: equity {status['equity']:,.0f} ({status['pnl_pct']:+.1%}), "
+              f"{status['trades']} closed trades, {len(status['holdings'])} open, buying next close: {status['pending_buy']}")
+
+
 def cmd_monitor(args, cfg) -> None:
     from .monitor import run_forever, run_once
 
@@ -197,7 +233,8 @@ def cmd_dashboard(args, cfg) -> None:
     from .dashboard import serve
 
     paths = {"paper": cfg.universe.paper_state_json, "monitor": cfg.universe.monitor_status_json,
-             "screen": cfg.universe.screen_report_csv, "prices": cfg.universe.prices_cache_csv}
+             "screen": cfg.universe.screen_report_csv, "prices": cfg.universe.prices_cache_csv,
+             "swing": cfg.universe.swing_status_json}
     serve(cfg, paths, host=args.host, port=args.port, extra_hosts=tuple(args.allow_host or ()))
 
 
@@ -216,6 +253,8 @@ def main(argv: list[str] | None = None) -> None:
     b = sub.add_parser("backtest", help="Backtest the strategy")
     b.add_argument("--start", default="2019-01-01")
     b.add_argument("--window", action="append", help="extra report window START:END, e.g. 2023-01-01:  (repeatable)")
+    sr = sub.add_parser("swing-run", help="Forward PAPER run of the short-term rule; writes data/swing_status.json")
+    sr.add_argument("--dry-run", action="store_true", help="print, do not write the status file")
     sw = sub.add_parser("swing-backtest", help="Backtest the short-term paper rule vs a random-entry baseline")
     sw.add_argument("--start", default="2019-01-01")
     sw.add_argument("--target", type=float, default=0.08)
@@ -246,6 +285,7 @@ def main(argv: list[str] | None = None) -> None:
         "backtest": cmd_backtest,
         "paper-run": cmd_paper_run,
         "swing-backtest": cmd_swing_backtest,
+        "swing-run": cmd_swing_run,
         "monitor": cmd_monitor,
         "dashboard": cmd_dashboard,
     }[args.cmd](args, cfg)

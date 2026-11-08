@@ -32,6 +32,12 @@ class SwingResult:
     trades: pd.DataFrame
     equity: pd.Series
     total_costs: float
+    cash: float = 0.0
+    open: dict | None = None            # symbol -> qty, entry_px, entry_i, entry_cost
+    pending_exit: dict | None = None    # symbol -> reason, executes at the next close
+    pending_buy: list | None = None     # symbols to buy at the next close
+    last_prices: dict | None = None
+    last_date: pd.Timestamp | None = None
 
     def summary(self) -> dict:
         t = self.trades
@@ -41,6 +47,48 @@ class SwingResult:
             n=len(t), win_rate=float((t.net > 0).mean()), avg_net_pct=float(t.net_pct.mean()),
             total_net=float(t.net.sum()), total_costs=self.total_costs, final=float(self.equity.iloc[-1]),
         )
+
+
+def params_from_config(sc) -> SwingParams:
+    return SwingParams(
+        lookback=sc.lookback, trend_days=sc.trend_days, rank_days=sc.rank_days, target_pct=sc.target_pct,
+        stop_pct=sc.stop_pct, max_hold_days=sc.max_hold_days, max_positions=sc.max_positions, capital=sc.capital,
+    )
+
+
+def swing_status(res: SwingResult, sc, benchmark: pd.Series | None = None) -> dict:
+    """JSON-ready snapshot for the dashboard. Open positions are marked at the last close."""
+    px = res.last_prices or {}
+    held = []
+    for s, h in sorted((res.open or {}).items()):
+        last = px.get(s)
+        held.append({
+            "symbol": s, "qty": h["qty"], "entry_px": h["entry_px"], "entry_date": str(h["entry_date"].date()),
+            "last": last, "pnl_pct": (last / h["entry_px"] - 1) if last else None,
+            "pending": (res.pending_exit or {}).get(s),
+        })
+    t = res.trades
+    recent = []
+    if not t.empty:
+        for r in t.tail(25).iloc[::-1].itertuples():
+            recent.append({"symbol": r.symbol, "entry": str(r.entry.date()), "exit": str(r.exit.date()),
+                           "reason": r.reason, "net": float(r.net), "net_pct": float(r.net_pct)})
+    s = res.summary()
+    equity = float(res.equity.iloc[-1]) if len(res.equity) else sc.capital
+    out = {
+        "mode": "PAPER sandbox (simulated)", "start_date": sc.start_date, "capital": sc.capital,
+        "as_of": str(res.last_date.date()) if res.last_date is not None else None,
+        "equity": equity, "cash": res.cash, "pnl": equity - sc.capital, "pnl_pct": equity / sc.capital - 1,
+        "trades": s["n"], "win_rate": s["win_rate"], "total_costs": s["total_costs"],
+        "holdings": held, "pending_buy": res.pending_buy or [], "recent": recent,
+        "rule": f"{sc.lookback}d high + above {sc.trend_days}d avg; +{sc.target_pct:.0%} / -{sc.stop_pct:.0%} / {sc.max_hold_days}d",
+    }
+    if benchmark is not None and len(benchmark.dropna()):
+        b = benchmark.dropna()
+        b = b[b.index >= pd.Timestamp(sc.start_date)]
+        if len(b) > 1:
+            out["benchmark_pct"] = float(b.iloc[-1] / b.iloc[0] - 1)
+    return out
 
 
 def _fill(price: float, side: Side, slip: float) -> float:
@@ -131,4 +179,9 @@ def run_swing(
         eq[d] = cash + sum(h["qty"] * row[s] for s, h in pos.items())
 
     trades = pd.DataFrame(rows)
-    return SwingResult(trades, pd.Series(eq), total_costs)
+    return SwingResult(
+        trades, pd.Series(eq, dtype=float), total_costs, cash=cash,
+        open={s: dict(h, entry_date=dates[h["entry_i"]]) for s, h in pos.items()},
+        pending_exit=dict(pending_exit), pending_buy=list(pending_buy),
+        last_prices=px.iloc[-1].dropna().to_dict(), last_date=dates[-1],
+    )

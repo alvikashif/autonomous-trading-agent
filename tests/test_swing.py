@@ -31,3 +31,25 @@ def test_stop_exits_on_drop():
     path = flat + [101, 103, 100, 95, 90, 90, 90, 90, 90, 90, 90, 90]
     res = run_swing(_prices(path), ["AAA"], SwingParams(capital=5000, max_positions=1), CostConfig())
     assert len(res.trades) >= 1 and (res.trades.reason == "stop").any()
+
+
+def test_swing_status_snapshot_and_dashboard_summary(tmp_path):
+    import json
+
+    from agent.config import SwingConfig
+    from agent.dashboard import build_summary
+    from agent.swing import params_from_config, swing_status
+
+    flat = [100.0] * 80
+    up = [101, 103, 106, 110, 114]            # breakout bought, still open at the end
+    px = _prices(flat + up)
+    sc = SwingConfig(start_date="2024-01-01", capital=5000, max_positions=1)
+    res = run_swing(px, ["AAA"], params_from_config(sc), CostConfig(), start=sc.start_date)
+    st = swing_status(res, sc, px["AAA"])
+    assert st["capital"] == 5000 and st["as_of"] == str(px.index[-1].date())
+    assert st["holdings"] and st["holdings"][0]["symbol"] == "AAA"
+    p = tmp_path / "swing.json"
+    p.write_text(json.dumps(st, default=str))
+    summary = build_summary(str(tmp_path / "none.json"), str(tmp_path / "none2.json"), str(tmp_path / "s.csv"),
+                            str(tmp_path / "p.csv"), 3, str(p))
+    assert summary["swing"]["rule"] == st["rule"]

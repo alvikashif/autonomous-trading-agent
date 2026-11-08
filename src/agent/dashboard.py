@@ -52,7 +52,7 @@ def _last_closes(prices_cache: str, symbols: list[str]) -> dict[str, float]:
 
 
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
-                  rebalance_months: int) -> dict:
+                  rebalance_months: int, swing_path: str | None = None) -> dict:
     state = _read_json(paper_path)
     mon = _read_json(monitor_path)
     positions: dict[str, int] = {k: int(v) for k, v in state.get("positions", {}).items() if int(v) > 0}
@@ -103,6 +103,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
             "alerts": mon.get("alerts", [])[-15:][::-1],
         },
         "screen": screen,
+        "swing": _read_json(swing_path) if swing_path else {},
     }
 
 
@@ -130,6 +131,8 @@ th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:6
 <div class="grid" id="kpis"></div>
 <div class="card"><h2>Monitor</h2><div id="mon"></div></div>
 <div class="card"><h2>Holdings</h2><table id="hold"></table></div>
+<div class="card" id="swingcard" style="display:none"><h2>Swing sandbox (paper, experimental)</h2><div id="swsum"></div>
+<table id="swhold"></table><div class="mute" style="margin-top:8px" id="swnext"></div><table id="swtr"></table></div>
 <div class="card"><h2>Alerts</h2><div id="alerts" class="mute">none</div></div>
 <div class="card"><h2>Recent trades</h2><table id="trades"></table></div>
 <div class="mute" style="font-size:12px;margin:8px 0 24px">Read-only view. Simulated trades only. Not investment advice.</div>
@@ -159,8 +162,20 @@ async function load(){
   ...d.holdings.map(h=>row([{t:h.symbol},{t:h.qty},{t:px(h.avg_cost)},{t:px(h.last)},{t:inr(h.value)},{t:inr(h.pnl),c:cls(h.pnl)},{t:pct(h.pnl_pct),c:cls(h.pnl_pct)},{t:pct(h.from_peak_pct),c:cls(h.from_peak_pct)},{t:h.price_source,c:'mute'}]))]);
  const a=document.getElementById('alerts');a.replaceChildren();
  if(!m.alerts.length)a.textContent='none';else m.alerts.forEach(x=>{const p=el('div','warn',x.ts.replace('T',' ')+'  '+x.kind+'  '+x.symbol+'  '+x.detail);a.appendChild(p)});
+ swing(d.swing);
  fill('trades',[row(['Date','Stock','Side','Qty','Price','Fees'].map(t=>({t})),true),
   ...d.trades.map(t=>row([{t:t.ts.slice(0,10)},{t:t.symbol},{t:t.side,c:t.side==='BUY'?'up':'down'},{t:t.qty},{t:px(t.fill_price)},{t:px(t.cost)}]))]);
+}
+function swing(s){
+ const c=document.getElementById('swingcard');if(!s||!s.mode){c.style.display='none';return}c.style.display='';
+ const sum=document.getElementById('swsum');sum.replaceChildren();
+ if(s.waiting){sum.textContent='Starts '+s.start_date+' with '+inr(s.capital)+' of paper money. No data yet.';fill('swhold',[]);fill('swtr',[]);document.getElementById('swnext').textContent='';return}
+ sum.appendChild(el('div','',`Rule: ${s.rule}. Since ${s.start_date}: equity ${inr(s.equity)} (${pct(s.pnl_pct)}) vs Nifty ${pct(s.benchmark_pct)} · ${s.trades} closed trades, ${s.win_rate==null?'–':(s.win_rate*100).toFixed(0)+'% won' } · costs ${inr(s.total_costs)}`));
+ fill('swhold',[row(['Open','Qty','Entry','Since','Last','P/L %','Next close'].map(t=>({t})),true),
+  ...s.holdings.map(h=>row([{t:h.symbol},{t:h.qty},{t:px(h.entry_px)},{t:h.entry_date,c:'mute'},{t:px(h.last)},{t:pct(h.pnl_pct),c:cls(h.pnl_pct)},{t:h.pending?('sell: '+h.pending):'hold',c:'mute'}]))]);
+ document.getElementById('swnext').textContent=s.pending_buy.length?('Buys at next close (as of '+s.as_of+'): '+s.pending_buy.join(', ')):'No buys queued.';
+ fill('swtr',[row(['Closed','Entry','Exit','Why','Net','Net %'].map(t=>({t})),true),
+  ...s.recent.map(r=>row([{t:r.symbol},{t:r.entry,c:'mute'},{t:r.exit,c:'mute'},{t:r.reason},{t:inr(r.net),c:cls(r.net)},{t:pct(r.net_pct),c:cls(r.net_pct)}]))]);
 }
 load();setInterval(load,15000);
 </script></body></html>"""
@@ -203,7 +218,7 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
             path = self.path.split("?")[0]
             if path == "/api/summary":
                 data = json.dumps(build_summary(paths["paper"], paths["monitor"], paths["screen"],
-                                                paths["prices"], cfg.portfolio.rebalance_months)).encode()
+                                                paths["prices"], cfg.portfolio.rebalance_months, paths.get("swing"))).encode()
                 ctype = "application/json"
             elif path in ("/", "/index.html"):
                 data, ctype = PAGE.encode(), "text/html; charset=utf-8"

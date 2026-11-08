@@ -19,6 +19,7 @@ class UniverseConfig:
     prices_cache_csv: str = "data/prices_cache.csv"
     paper_state_json: str = "data/paper_state.json"
     monitor_status_json: str = "data/monitor_status.json"
+    swing_status_json: str = "data/swing_status.json"
     excluded_symbols: tuple[str, ...] = ()
 
 
@@ -33,6 +34,20 @@ class PortfolioConfig:
 
 
 @dataclass(frozen=True)
+class SwingConfig:
+    """Short-term PAPER sandbox. Replayed from start_date, so there is no extra state file to corrupt."""
+    start_date: str = "2026-11-09"
+    capital: float = 50000.0
+    lookback: int = 20
+    trend_days: int = 50
+    rank_days: int = 60
+    target_pct: float = 0.08
+    stop_pct: float = 0.04
+    max_hold_days: int = 10
+    max_positions: int = 2
+
+
+@dataclass(frozen=True)
 class Config:
     universe: UniverseConfig = field(default_factory=UniverseConfig)
     shariah: Thresholds = field(default_factory=Thresholds)
@@ -40,6 +55,7 @@ class Config:
     risk: RiskLimits = field(default_factory=RiskLimits)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     costs: CostConfig = field(default_factory=CostConfig)
+    swing: SwingConfig = field(default_factory=SwingConfig)
 
 
 def _build(cls, raw: dict):
