@@ -10,9 +10,12 @@ import pytest
 
 from agent.ai_brain import (
     build_analysis_prompt,
+    build_take_profit_prompt,
     clean_json_response,
     compute_order_size,
+    evaluate_take_profit,
     extract_technical_candidates,
+    get_symbol_technicals,
     load_ai_signals,
     query_llm,
     save_ai_signals,
@@ -250,3 +253,59 @@ def test_save_and_load_ai_signals(tmp_path):
     loaded = load_ai_signals(sig_file)
     assert loaded["verdict"] == "EXECUTE"
     assert loaded["selected_trade"]["symbol"] == "TCS"
+
+
+def test_get_symbol_technicals():
+    dates = pd.bdate_range("2026-01-01", periods=60)
+    prices = np.linspace(100, 150, 60)
+    df = pd.DataFrame({"TESTSYM": prices}, index=dates)
+    tech = get_symbol_technicals("TESTSYM", df)
+    assert tech["current_price"] == 150.0
+    assert tech["rsi_14"] > 50.0
+    assert tech["pct_above_50sma"] > 0.0
+
+
+def test_evaluate_take_profit_mocked(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("AI_PROVIDER", "claude")
+    holding = {
+        "symbol": "SHYAMMETL",
+        "entry_price": 1300.0,
+        "current_price": 1404.0,
+        "gain_pct": 0.08,
+        "days_held": 4,
+    }
+    tech = {
+        "rsi_14": 65.0,
+        "pct_above_50sma": 12.0,
+        "ret_5d_pct": 5.0,
+        "ret_20d_pct": 18.0,
+        "pct_from_20d_high": 2.0,
+    }
+
+    with patch("requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "symbol": "SHYAMMETL",
+                        "decision": "HOLD_AND_TRAIL",
+                        "confidence_score": 8.8,
+                        "reason": "Strong continuation momentum with healthy RSI.",
+                        "revised_target_pct": 0.12,
+                        "trailing_stop_pct": 0.05,
+                    }),
+                }
+            ]
+        }
+        mock_post.return_value = mock_resp
+
+        cfg = AIBrainConfig()
+        res = evaluate_take_profit(holding, tech, cfg)
+        assert res["decision"] == "HOLD_AND_TRAIL"
+        assert res["revised_target_pct"] == 0.12
+        assert res["trailing_stop_pct"] == 0.05
+

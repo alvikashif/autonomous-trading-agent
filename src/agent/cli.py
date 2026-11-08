@@ -206,6 +206,25 @@ def cmd_swing_run(args, cfg) -> None:
     else:
         res = run_swing(stocks, symbols, params_from_config(sc), cfg.costs, "breakout", start=sc.start_date)
         status = swing_status(res, sc, bench)
+
+        # AI Take-Profit Evaluation: Ask AI Brain if any holding hitting target should be trailed higher
+        if cfg.ai.resolved_api_key():
+            from .ai_brain import evaluate_take_profit, get_symbol_technicals, load_ai_signals, save_ai_signals
+
+            ai_sig = load_ai_signals(cfg.universe.ai_signals_json)
+            evals = ai_sig.get("exit_evaluations", {})
+            for h in status.get("holdings", []):
+                if h.get("pending") == "target":
+                    sym = h["symbol"]
+                    print(f"Holding {sym} hit profit target (+{h.get('pnl_pct', 0)*100:.1f}%). Asking AI Brain whether to take profit or trail...")
+                    tech = get_symbol_technicals(sym, stocks)
+                    decision = evaluate_take_profit(h, tech, cfg.ai)
+                    evals[sym] = decision
+                    print(f"  AI Decision for {sym}: {decision['decision']} ({decision.get('reason')})")
+                    if decision["decision"] == "HOLD_AND_TRAIL":
+                        h["pending"] = f"trail (+{decision.get('revised_target_pct', 0.12):.0%} target, +{decision.get('trailing_stop_pct', 0.05):.0%} stop)"
+            ai_sig["exit_evaluations"] = evals
+            save_ai_signals(ai_sig, cfg.universe.ai_signals_json)
     if args.dry_run:
         print(json.dumps(status, indent=1, default=str)[:1500])
         return
@@ -577,6 +596,52 @@ def cmd_ai_trade(args, cfg) -> None:
     print("Order execution completed successfully.")
 
 
+def cmd_ai_eval_exit(args, cfg) -> None:
+    from .ai_brain import evaluate_take_profit, get_symbol_technicals, load_ai_signals, save_ai_signals
+
+    sym = args.symbol.upper()
+    prices_path = cfg.universe.prices_cache_csv
+    if not Path(prices_path).is_file():
+        raise SystemExit(f"Prices cache not found at {prices_path}.")
+    prices_df = pd.read_csv(prices_path, index_col=0, parse_dates=True)
+
+    tech = get_symbol_technicals(sym, prices_df)
+    if not tech:
+        raise SystemExit(f"No technical data found for symbol '{sym}'.")
+
+    cur_px = args.current_price or tech["current_price"]
+    entry_px = args.entry_price or (cur_px / 1.08)  # default assumed target reached
+    gain_pct = (cur_px / entry_px - 1)
+
+    holding = {
+        "symbol": sym,
+        "entry_price": entry_px,
+        "current_price": cur_px,
+        "gain_pct": gain_pct,
+        "days_held": args.days_held or 6,
+    }
+
+    print(f"=== AI Take-Profit Maximizer Evaluation for {sym} ===")
+    print(f"Entry Price   : Rs {entry_px:.2f}")
+    print(f"Current Price : Rs {cur_px:.2f} (+{gain_pct*100:.1f}%)")
+    print(f"14-day RSI    : {tech['rsi_14']:.1f}")
+    print(f"Querying {cfg.ai.resolved_provider().upper()} ({cfg.ai.resolved_model()})...")
+
+    decision = evaluate_take_profit(holding, tech, cfg.ai)
+    print("\n--- AI Brain Take-Profit Recommendation ---")
+    print(f"Decision      : {decision['decision']}")
+    print(f"Confidence    : {decision.get('confidence_score', '–')}/10")
+    print(f"Reason        : {decision.get('reason')}")
+    if decision["decision"] == "HOLD_AND_TRAIL":
+        print(f"Revised Target: Rs {decision.get('revised_target_price', 0):.2f} (+{decision.get('revised_target_pct', 0)*100:.0f}%)")
+        print(f"Trailing Stop : Rs {decision.get('trailing_stop_price', 0):.2f} (+{decision.get('trailing_stop_pct', 0)*100:.0f}% locked)")
+
+    ai_sig = load_ai_signals(cfg.universe.ai_signals_json)
+    ai_sig.setdefault("exit_evaluations", {})[sym] = decision
+    save_ai_signals(ai_sig, cfg.universe.ai_signals_json)
+    print(f"\nDecision saved to {cfg.universe.ai_signals_json} and active on dashboard.")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="agent")
     p.add_argument("--config", default="config.yaml")
@@ -640,6 +705,12 @@ def main(argv: list[str] | None = None) -> None:
     ait.add_argument("--dry-run", action="store_true", help="simulate order calculations without sending to Groww")
     ait.add_argument("--yes", action="store_true", help="skip confirmation prompt in live mode")
 
+    aie = sub.add_parser("ai-eval-exit", help="Ask AI Brain whether to take profit or trail higher on a winning trade")
+    aie.add_argument("--symbol", required=True, help="stock symbol to evaluate (e.g. SHYAMMETL)")
+    aie.add_argument("--entry-price", type=float, help="original entry price (optional)")
+    aie.add_argument("--current-price", type=float, help="current market price (optional)")
+    aie.add_argument("--days-held", type=int, help="days held so far (optional)")
+
     args = p.parse_args(argv)
     cfg = load_config(args.config)
     {
@@ -657,6 +728,7 @@ def main(argv: list[str] | None = None) -> None:
         "ai-status": cmd_ai_status,
         "ai-scan": cmd_ai_scan,
         "ai-trade": cmd_ai_trade,
+        "ai-eval-exit": cmd_ai_eval_exit,
     }[args.cmd](args, cfg)
 
 

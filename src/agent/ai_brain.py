@@ -417,3 +417,133 @@ def load_ai_signals(path: str | Path = "data/ai_signals.json") -> dict[str, Any]
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def get_symbol_technicals(symbol: str, prices_df: pd.DataFrame) -> dict[str, Any]:
+    """Calculate key momentum and trend technicals for a specific stock."""
+    if symbol not in prices_df.columns:
+        return {}
+    series = prices_df[symbol].dropna()
+    if len(series) < 20:
+        return {}
+
+    last = float(series.iloc[-1])
+    high_20 = float(series.iloc[-21:-1].max()) if len(series) >= 21 else float(series.max())
+    sma_50 = float(series.iloc[-50:].mean()) if len(series) >= 50 else float(series.mean())
+    sma_200 = float(series.iloc[-200:].mean()) if len(series) >= 200 else sma_50
+    ret_5d = float(series.iloc[-1] / series.iloc[-6] - 1) if len(series) >= 6 else 0.0
+    ret_20d = float(series.iloc[-1] / series.iloc[-21] - 1) if len(series) >= 21 else 0.0
+
+    delta = series.diff()
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    rs = gain / loss.replace(0, 1e-9)
+    rsi_14 = float((100 - (100 / (1 + rs))).iloc[-1]) if len(series) >= 15 else 50.0
+
+    return {
+        "current_price": round(last, 2),
+        "high_20d": round(high_20, 2),
+        "pct_from_20d_high": round((last / high_20 - 1) * 100, 1),
+        "sma_50": round(sma_50, 2),
+        "pct_above_50sma": round((last / sma_50 - 1) * 100, 1),
+        "sma_200": round(sma_200, 2),
+        "ret_5d_pct": round(ret_5d * 100, 1),
+        "ret_20d_pct": round(ret_20d * 100, 1),
+        "rsi_14": round(rsi_14, 1),
+    }
+
+
+def build_take_profit_prompt(
+    holding: dict[str, Any],
+    technicals: dict[str, Any],
+    target_pct: float = 0.08,
+) -> str:
+    """Build prompt when a position hits its target gain to decide whether to take profit or trail higher."""
+    sym = holding.get("symbol", "")
+    entry_px = float(holding.get("entry_price", holding.get("entry_px", 0.0)))
+    cur_px = float(holding.get("current_price", holding.get("last", entry_px)))
+    gain_pct = (cur_px / entry_px - 1) if entry_px > 0 else 0.0
+    days_held = holding.get("days_held", 0)
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M IST")
+
+    return f"""You are the lead portfolio risk manager for a disciplined swing trading fund.
+Evaluation Timestamp: {now_str}
+A currently held stock ({sym}) has reached its profit target of +{target_pct:.0%}.
+
+POSITION STATUS:
+- Symbol: {sym}
+- Entry Price: Rs {entry_px:.2f}
+- Current Market Price: Rs {cur_px:.2f}
+- Unrealized P&L: +{gain_pct * 100:.1f}%
+- Days Held: {days_held} trading days
+
+CURRENT TECHNICAL INDICATORS:
+- 14-day RSI: {technicals.get('rsi_14', 50.0):.1f}
+- % Above 50-day SMA: {technicals.get('pct_above_50sma', 0.0):.1f}%
+- 5-day Return: {technicals.get('ret_5d_pct', 0.0):.1f}%
+- 20-day Return: {technicals.get('ret_20d_pct', 0.0):.1f}%
+- Distance from 20-day High: {technicals.get('pct_from_20d_high', 0.0):.1f}%
+
+CRITICAL STRATEGIC DECISION:
+The position has hit its target gain. Should we:
+1. 'TAKE_PROFIT': Lock in the profit now. Choose this if RSI is overbought (>75-80), momentum is exhausting, or risk of a sharp mean-reversion pullback is high.
+2. 'HOLD_AND_TRAIL': Let the winner run to maximize profit in this trade. Choose this ONLY if momentum is accelerating, the breakout has powerful continuation, and higher gains (+12% to +15%) are achievable.
+   If HOLD_AND_TRAIL is chosen, you MUST provide:
+   - revised_target_pct: extended target (e.g. 0.12 or 0.15 for +12% to +15%)
+   - trailing_stop_pct: guaranteed lock-in stop (e.g. 0.05 to protect at least +5% gain)
+
+OUTPUT FORMAT (Respond with ONLY a single valid JSON object):
+{{
+  "symbol": "{sym}",
+  "decision": "TAKE_PROFIT" | "HOLD_AND_TRAIL",
+  "confidence_score": 8.5,
+  "reason": "Clear 1-2 sentence technical reason for decision",
+  "revised_target_pct": 0.12,
+  "revised_target_price": {cur_px * 1.04:.2f},
+  "trailing_stop_pct": 0.05,
+  "trailing_stop_price": {entry_px * 1.05:.2f},
+  "max_additional_days": 5
+}}
+"""
+
+
+def evaluate_take_profit(
+    holding: dict[str, Any],
+    technicals: dict[str, Any],
+    ai_config: AIBrainConfig,
+) -> dict[str, Any]:
+    """Query AI Brain to decide if profit should be taken immediately or trailed higher."""
+    prompt = build_take_profit_prompt(holding, technicals, target_pct=ai_config.target_pct)
+    provider = ai_config.resolved_provider()
+    model = ai_config.resolved_model()
+    api_key = ai_config.resolved_api_key()
+
+    if not api_key:
+        logger.warning("No API key configured for AI exit evaluation. Defaulting to TAKE_PROFIT.")
+        return {
+            "symbol": holding.get("symbol"),
+            "decision": "TAKE_PROFIT",
+            "confidence_score": 10.0,
+            "reason": "Default safety exit: Target reached, no AI API key configured.",
+        }
+
+    try:
+        raw = query_llm(prompt, provider, model, api_key)
+        parsed = clean_json_response(raw)
+        dec = parsed.get("decision", "TAKE_PROFIT").upper()
+        if dec not in ("TAKE_PROFIT", "HOLD_AND_TRAIL"):
+            dec = "TAKE_PROFIT"
+        parsed["decision"] = dec
+        parsed["provider"] = provider
+        parsed["model"] = model
+        parsed["evaluated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M IST")
+        return parsed
+    except Exception as e:
+        logger.error("Failed to query AI brain for exit decision: %s. Defaulting to TAKE_PROFIT.", e)
+        return {
+            "symbol": holding.get("symbol"),
+            "decision": "TAKE_PROFIT",
+            "confidence_score": 10.0,
+            "reason": f"Default safety exit: Target reached; AI query error ({e}).",
+        }

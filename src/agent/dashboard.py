@@ -249,6 +249,16 @@ function renderAI(ai){
  }else{
   tr.appendChild(el('div','mute','No trade executed (insufficient conviction or unfavorable market regime).'));
  }
+ if(ai.exit_evaluations&&Object.keys(ai.exit_evaluations).length){
+  const evBox=el('div','','');evBox.style.marginTop='8px';evBox.style.padding='8px';evBox.style.border='1px solid var(--line)';evBox.style.borderRadius='6px';
+  evBox.appendChild(el('strong','','AI Take-Profit Maximizer: '));
+  for(const [sym,ev] of Object.entries(ai.exit_evaluations)){
+    const line=el('div',ev.decision==='HOLD_AND_TRAIL'?'up':'warn',
+      `${sym}: ${ev.decision} · ${ev.reason||''} ${ev.revised_target_pct?('(Target: +'+(ev.revised_target_pct*100).toFixed(0)+'%, Stop: +'+(ev.trailing_stop_pct*100).toFixed(0)+'%)'):''}`);
+    evBox.appendChild(line);
+  }
+  tr.appendChild(evBox);
+ }
 }
 load();setInterval(load,15000);
 </script></body></html>"""
