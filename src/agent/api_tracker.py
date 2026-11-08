@@ -117,3 +117,15 @@ def record_api_call(
 
     p.write_text(json.dumps(state, indent=2))
     return state
+
+
+def is_provider_budget_exhausted(provider: str, usage_path: str | Path = "data/api_usage.json") -> bool:
+    """Return True if the overall budget limit ($5.00) or provider threshold is reached."""
+    try:
+        state = load_api_usage(usage_path)
+        limit = float(state.get("budget_limit_usd", 5.0))
+        spent = float(state.get("total_spent_usd", 0.0))
+        # If less than $0.005 remaining, treat as exhausted
+        return (limit - spent) <= 0.005
+    except Exception:
+        return False

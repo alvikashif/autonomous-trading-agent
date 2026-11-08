@@ -340,3 +340,25 @@ def test_api_tracker(tmp_path):
     assert loaded["remaining_usd"] == state2["remaining_usd"]
 
 
+def test_claude_to_gemini_automatic_failover_on_error(monkeypatch):
+    from agent.ai_brain import query_llm, get_last_used_provider
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy_gemini_key")
+    
+    with patch("agent.ai_brain._call_claude", side_effect=RuntimeError("Claude 400: credit balance too low")), \
+         patch("agent.ai_brain._call_gemini", return_value='{"verdict": "EXECUTE"}') as mock_gemini:
+        res = query_llm("test prompt", "claude", "claude-sonnet-5-5", "dummy_claude_key")
+        assert res == '{"verdict": "EXECUTE"}'
+        assert mock_gemini.call_count == 1
+
+
+def test_claude_to_gemini_automatic_failover_on_budget_exhaustion(monkeypatch):
+    from agent.ai_brain import query_llm
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy_gemini_key")
+
+    with patch("agent.api_tracker.is_provider_budget_exhausted", return_value=True), \
+         patch("agent.ai_brain._call_gemini", return_value='{"verdict": "PASS"}') as mock_gemini:
+        res = query_llm("test prompt", "claude", "claude-sonnet-5-5", "dummy_claude_key")
+        assert res == '{"verdict": "PASS"}'
+        assert mock_gemini.call_count == 1
+
+

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -183,7 +184,20 @@ def _normalize_gemini_model(model: str) -> str:
     return m
 
 
+LAST_USED_PROVIDER: str = ""
+LAST_USED_MODEL: str = ""
+
+
+def get_last_used_provider() -> str:
+    return LAST_USED_PROVIDER
+
+
+def get_last_used_model() -> str:
+    return LAST_USED_MODEL
+
+
 def _call_claude(prompt: str, model: str, api_key: str) -> str:
+    global LAST_USED_PROVIDER, LAST_USED_MODEL
     active_model = _normalize_claude_model(model)
     url = "https://api.anthropic.com/v1/messages"
     headers = {
@@ -210,6 +224,9 @@ def _call_claude(prompt: str, model: str, api_key: str) -> str:
         record_api_call("claude", active_model, in_tok, out_tok)
     except Exception:
         pass
+
+    LAST_USED_PROVIDER = "claude"
+    LAST_USED_MODEL = active_model
 
     texts = [b["text"] for b in data.get("content", []) if b.get("type", "text") == "text" and "text" in b]
     if texts:
@@ -258,6 +275,7 @@ def _call_openai(prompt: str, model: str, api_key: str) -> str:
 
 
 def _call_gemini(prompt: str, model: str, api_key: str) -> str:
+    global LAST_USED_PROVIDER, LAST_USED_MODEL
     active_model = _normalize_gemini_model(model)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{active_model}:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
@@ -283,6 +301,9 @@ def _call_gemini(prompt: str, model: str, api_key: str) -> str:
     except Exception:
         pass
 
+    LAST_USED_PROVIDER = "gemini"
+    LAST_USED_MODEL = active_model
+
     parts = []
     for cand in data.get("candidates", []):
         for part in cand.get("content", {}).get("parts", []):
@@ -294,21 +315,56 @@ def _call_gemini(prompt: str, model: str, api_key: str) -> str:
 
 
 def query_llm(prompt: str, provider: str, model: str, api_key: str) -> str:
-    """Universal dispatcher for the configured AI provider."""
-    if not api_key:
-        raise ValueError(
-            f"No API key found for provider '{provider}'. Please set {provider.upper()}_API_KEY in ENV."
-        )
+    """Universal dispatcher for the configured AI provider with automatic Gemini failover."""
+    from .api_tracker import is_provider_budget_exhausted
 
     prov = provider.lower()
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+    # Automatic Failover for Claude:
+    # If Claude budget is exhausted or call fails, seamlessly fall back to Gemini
     if prov in ("claude", "anthropic"):
-        return _call_claude(prompt, model, api_key)
+        if is_provider_budget_exhausted("claude"):
+            if gemini_key:
+                logger.warning(
+                    "Claude prepaid budget ($5 limit) is exhausted! Automatically failing over to Google Gemini (gemini-3.5-flash)..."
+                )
+                return _call_gemini(prompt, "gemini-3.5-flash", gemini_key)
+            else:
+                raise RuntimeError("Claude budget exhausted and no GEMINI_API_KEY configured for failover.")
+
+        if not api_key:
+            if gemini_key:
+                logger.warning("Claude API key missing; failing over to Gemini (gemini-3.5-flash)...")
+                return _call_gemini(prompt, "gemini-3.5-flash", gemini_key)
+            raise ValueError(
+                f"No API key found for Claude, and no GEMINI_API_KEY available for failover."
+            )
+
+        try:
+            return _call_claude(prompt, model, api_key)
+        except Exception as err:
+            logger.warning("Claude invocation failed: %s", err)
+            if gemini_key:
+                logger.warning("Automatically failing over to Google Gemini (gemini-3.5-flash)...")
+                return _call_gemini(prompt, "gemini-3.5-flash", gemini_key)
+            raise
+
     elif prov == "deepseek":
+        if not api_key:
+            raise ValueError(f"No API key found for provider '{provider}'.")
         return _call_deepseek(prompt, model, api_key)
+
     elif prov == "openai":
+        if not api_key:
+            raise ValueError(f"No API key found for provider '{provider}'.")
         return _call_openai(prompt, model, api_key)
+
     elif prov in ("gemini", "google"):
+        if not api_key:
+            raise ValueError(f"No API key found for provider '{provider}'.")
         return _call_gemini(prompt, model, api_key)
+
     else:
         raise ValueError(
             f"Unsupported AI provider '{provider}'. Supported options: claude, deepseek, openai, gemini."

@@ -544,10 +544,15 @@ def cmd_ai_scan(args, cfg) -> None:
 
     print(f"\nQuerying {provider} ({model})...")
     raw_response = query_llm(prompt, provider, model, api_key)
+    from .ai_brain import get_last_used_model, get_last_used_provider
+    actual_prov = get_last_used_provider() or provider
+    actual_model = get_last_used_model() or model
+    if actual_prov != provider:
+        print(f"Notice: Failover engaged. Analysis completed by {actual_prov.upper()} ({actual_model}).")
     parsed = clean_json_response(raw_response)
     validated = validate_ai_decision(parsed, compliant_symbols, min_confidence=ai.resolved_min_confidence())
-    validated["provider"] = provider
-    validated["model"] = model
+    validated["provider"] = actual_prov
+    validated["model"] = actual_model
 
     save_ai_signals(validated, cfg.universe.ai_signals_json)
     print(f"Analysis saved to {cfg.universe.ai_signals_json}")

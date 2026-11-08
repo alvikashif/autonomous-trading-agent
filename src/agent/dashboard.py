@@ -1354,27 +1354,58 @@ function renderAI(ai, budget) {
     sum.appendChild(sBox);
   }
 
-  // API Budget Credit Meter
+  // API Budget Credit Meter - Dual Provider (Claude + Gemini) with Auto-Failover
   if (budget && budget.budget_limit_usd != null) {
     const bSpent = '$' + (budget.total_spent_usd || 0).toFixed(4);
     const bLimit = '$' + (budget.budget_limit_usd || 5.0).toFixed(2);
     const bRem = '$' + (budget.remaining_usd != null ? budget.remaining_usd : 5.0).toFixed(4);
     const pctUsed = Math.min(100, ((budget.total_spent_usd || 0) / (budget.budget_limit_usd || 5.0) * 100)).toFixed(1);
+    const provs = budget.providers || {};
+    const claudeP = provs.claude || { calls: 0, cost_usd: 0.0 };
+    const geminiP = provs.gemini || { calls: 0, cost_usd: 0.0 };
+    const claudeExhausted = (budget.remaining_usd != null && budget.remaining_usd <= 0.005);
+
     const bBox = el('div', '', '');
     bBox.style.width = '100%';
-    bBox.style.marginTop = '10px';
-    bBox.style.padding = '8px 12px';
-    bBox.style.background = 'rgba(15, 23, 42, 0.7)';
+    bBox.style.marginTop = '12px';
+    bBox.style.padding = '12px';
+    bBox.style.background = 'rgba(15, 23, 42, 0.75)';
     bBox.style.border = '1px solid #1e293b';
-    bBox.style.borderRadius = '8px';
+    bBox.style.borderRadius = '10px';
     bBox.style.fontSize = '12px';
-    bBox.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:5px">` +
-      `<span>AI Budget ($5.00 limit): <strong>${bSpent}</strong> spent</span>` +
-      `<span style="color:#34d399">Remaining: <strong>${bRem}</strong> (${(100 - pctUsed).toFixed(1)}%)</span>` +
-      `</div>` +
-      `<div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden">` +
-      `<div style="height:100%;width:${pctUsed}%;background:#38bdf8"></div>` +
-      `</div>`;
+
+    bBox.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:600;color:var(--txt);display:flex;align-items:center;gap:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          AI Prepaid Budget ($5.00 Cap)
+        </span>
+        <span style="color:#34d399;font-weight:600">Remaining: ${bRem} (${(100 - pctUsed).toFixed(1)}%)</span>
+      </div>
+      <div style="height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-bottom:10px">
+        <div style="height:100%;width:${pctUsed}%;background:linear-gradient(90deg, #38bdf8, #818cf8)"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="background:rgba(2, 6, 23, 0.6);border:1px solid ${claudeExhausted ? '#ef4444' : '#1e293b'};border-radius:6px;padding:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-weight:600;color:#cbd5e1">Claude Sonnet 5.5</span>
+            <span class="pill" style="font-size:10px;padding:1px 6px;background:${claudeExhausted ? 'rgba(239,68,68,0.2)' : 'rgba(56,189,248,0.15)'};color:${claudeExhausted ? '#f87171' : '#38bdf8'};border-color:${claudeExhausted ? '#ef4444' : 'rgba(56,189,248,0.3)'}">${claudeExhausted ? 'EXHAUSTED' : 'PRIMARY'}</span>
+          </div>
+          <div style="color:var(--mute);font-size:11px">Spent: <strong style="color:var(--txt)">$${(claudeP.cost_usd || 0).toFixed(4)}</strong> · ${claudeP.calls || 0} calls</div>
+        </div>
+        <div style="background:rgba(2, 6, 23, 0.6);border:1px solid ${claudeExhausted ? '#10b981' : '#1e293b'};border-radius:6px;padding:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-weight:600;color:#cbd5e1">Gemini 3.5 Flash</span>
+            <span class="pill" style="font-size:10px;padding:1px 6px;background:${claudeExhausted ? 'rgba(16,185,129,0.2)' : 'rgba(148,163,184,0.15)'};color:${claudeExhausted ? '#34d399' : '#94a3b8'};border-color:${claudeExhausted ? '#10b981' : '#334155'}">${claudeExhausted ? 'ACTIVE FALLBACK' : 'STANDBY'}</span>
+          </div>
+          <div style="color:var(--mute);font-size:11px">Spent: <strong style="color:var(--txt)">$${(geminiP.cost_usd || 0).toFixed(4)}</strong> · ${geminiP.calls || 0} calls</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--subtle);display:flex;align-items:center;gap:4px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Auto-failover active: If Claude limit exhausts, Gemini executes trades by default.</span>
+      </div>
+    `;
     sum.appendChild(bBox);
   }
 
