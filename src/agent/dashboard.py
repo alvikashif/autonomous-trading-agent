@@ -103,6 +103,8 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         screen = {"compliant": int(rep["compliant"].sum()), "total": int(len(rep))}
     except (OSError, ValueError, KeyError):
         pass
+    if mon.get("live_mode") is True:
+        broker_mode = "live"
     mode_text = "LIVE (Groww API, CNC delivery)" if broker_mode == "live" else "PAPER (simulated, no real orders)"
     try:
         from .api_tracker import load_api_usage
@@ -2380,7 +2382,9 @@ async function load() {
   mon.replaceChildren();
   if (m.heartbeat) {
     mon.appendChild(el('div', '', `Heartbeat: ${m.heartbeat.replace('T', ' ')} · Trailing Stop: ${m.stop_pct ? (m.stop_pct * 100) + '%' : 'Disabled'}`));
-    mon.appendChild(el('div', 'mute', `Action Mode: ${m.act ? 'Automatic Paper Execution' : 'Alert Only (No automatic broker sell)'}`));
+    const isLiveExec = Boolean(m.live_mode);
+    const actText = isLiveExec ? 'Automatic Live Execution (Groww CNC)' : (m.act ? 'Automatic Paper Execution' : 'Alert Only (No automatic broker sell)');
+    mon.appendChild(el('div', isLiveExec ? 'up' : 'mute', `Action Mode: ${actText}`));
   } else {
     mon.appendChild(el('div', 'mute', 'Real-time monitor loop not active.'));
   }
@@ -2853,6 +2857,8 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
                             broker_mode = "live"
                     except Exception:
                         pass
+                if _read_json(paths["monitor"]).get("live_mode") is True:
+                    broker_mode = "live"
                 ai_path = paths.get("ai_signals", "data/ai_signals.json")
                 summary = build_summary(
                     paths["paper"], paths["monitor"], paths["screen"],
