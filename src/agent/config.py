@@ -98,10 +98,12 @@ class AIBrainConfig:
 
     def resolved_model(self) -> str:
         m = os.environ.get("AI_MODEL", "").strip() or self.model.strip()
-        if m:
-            return m
         prov = self.resolved_provider()
-        return DEFAULT_AI_MODELS.get(prov, "claude-3-5-sonnet-latest")
+        if m:
+            if prov == "claude" and any(k in m.lower() for k in ("3-5-sonnet", "sonnet-3", "20241022", "3.5", "latest")):
+                return "claude-sonnet-5-5"
+            return m
+        return DEFAULT_AI_MODELS.get(prov, "claude-sonnet-5-5")
 
     def resolved_api_key(self) -> str:
         prov = self.resolved_provider()

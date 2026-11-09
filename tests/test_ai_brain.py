@@ -72,6 +72,14 @@ def test_env_resolution_and_defaults(monkeypatch):
     assert cfg.resolved_model() == "o3-mini"
     assert cfg.resolved_api_key() == "sk-openai-xyz"
 
+    # Test retired Claude model normalization
+    monkeypatch.setenv("AI_PROVIDER", "claude")
+    monkeypatch.setenv("AI_MODEL", "claude-3-5-sonnet-20241022")
+    assert cfg.resolved_model() == "claude-sonnet-5-5"
+
+    monkeypatch.setenv("AI_MODEL", "claude-3-5-sonnet-latest")
+    assert cfg.resolved_model() == "claude-sonnet-5-5"
+
 
 def test_load_dotenv(tmp_path, monkeypatch):
     monkeypatch.delenv("TEST_DOTENV_KEY", raising=False)

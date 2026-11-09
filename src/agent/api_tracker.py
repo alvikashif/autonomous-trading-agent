@@ -15,7 +15,7 @@ IST = ZoneInfo("Asia/Kolkata")
 # Token pricing in USD per 1,000,000 tokens
 MODEL_RATES = {
     "claude": {
-        "input": 3.00,        # $3 / MTok for Claude 3.5 Sonnet / 3.7
+        "input": 3.00,        # $3 / MTok for Claude Sonnet 5.5 / 3.7
         "output": 15.00,      # $15 / MTok
     },
     "gemini": {

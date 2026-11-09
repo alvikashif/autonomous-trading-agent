@@ -199,7 +199,7 @@ You MUST reply with ONLY a single valid JSON object, without conversational fluf
 
 def _normalize_claude_model(model: str) -> str:
     m = model.strip()
-    if not m or "latest" in m or "3-5-sonnet" in m or "sonnet-3" in m:
+    if not m or any(k in m.lower() for k in ("3-5-sonnet", "sonnet-3", "20241022", "3.5", "latest")):
         return "claude-sonnet-5-5"
     return m
 
