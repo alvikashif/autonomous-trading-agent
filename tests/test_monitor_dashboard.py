@@ -140,6 +140,9 @@ def test_dashboard_rejects_foreign_host_and_enforces_password(tmp_path):
         assert _get(port, "/api/summary", {"Authorization": f"Basic {bad}"})[0] == 401
         good = base64.b64encode(b"u:s3cret").decode()
         assert _get(port, "/api/summary", {"Authorization": f"Basic {good}"})[0] == 200
+        assert _get(port, "/api/summary", {"Host": "100.127.177.5:8765", "Authorization": f"Basic {good}"})[0] == 200
+        assert _get(port, "/api/summary", {"Host": "100.87.146.109", "Authorization": f"Basic {good}"})[0] == 200
+        assert _get(port, "/api/summary", {"Host": "captain-new.ts.net", "Authorization": f"Basic {good}"})[0] == 200
     finally:
         srv.shutdown()
 

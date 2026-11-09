@@ -2746,6 +2746,25 @@ setInterval(load, 15000);
 </html>"""
 
 
+def is_host_allowed(host: str, allowed_hosts: set[str]) -> bool:
+    if not host:
+        return False
+    host = host.lower().strip()
+    if host in allowed_hosts:
+        return True
+    # Tailscale CGNAT IP range: 100.64.0.0 to 100.127.255.255
+    if host.startswith("100."):
+        parts = host.split(".")
+        if len(parts) == 4 and all(p.isdigit() for p in parts):
+            second_octet = int(parts[1])
+            if 64 <= second_octet <= 127:
+                return True
+    # Tailscale MagicDNS (*.ts.net)
+    if host.endswith(".ts.net"):
+        return True
+    return False
+
+
 def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None,
                  username: str | None = None):
     # Derive HMAC secret from password and username (or fallback)
@@ -2812,7 +2831,7 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
 
         def do_GET(self):
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-            if host not in allowed_hosts:
+            if not is_host_allowed(host, allowed_hosts):
                 return self._deny(403, "forbidden host")
 
             path = self.path.split("?")[0]
@@ -2887,7 +2906,7 @@ def make_handler(cfg, paths: dict, allowed_hosts: set[str], password: str | None
 
         def do_POST(self):
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-            if host not in allowed_hosts:
+            if not is_host_allowed(host, allowed_hosts):
                 return self._deny(403, "forbidden host")
 
             path = self.path.split("?")[0]
@@ -2968,7 +2987,12 @@ def serve(cfg, paths: dict, host: str = "127.0.0.1", port: int = 8765, extra_hos
     username = os.environ.get("DASHBOARD_USERNAME", "admin").strip()
     if host not in LOOPBACK and not password:
         raise SystemExit("refusing to bind a non-loopback address without DASHBOARD_PASSWORD set")
-    allowed = set(LOOPBACK) | {h.lower() for h in extra_hosts} | ({host.lower()} if host != "0.0.0.0" else set())
+    env_allow = os.environ.get("DASHBOARD_ALLOW_HOST", "")
+    all_extras = list(extra_hosts)
+    if env_allow:
+        all_extras.extend(env_allow.split(","))
+    clean_extras = {h.strip().lower() for h in all_extras if h.strip()}
+    allowed = set(LOOPBACK) | clean_extras | ({host.lower()} if host != "0.0.0.0" else set())
     srv = ThreadingHTTPServer((host, port), make_handler(cfg, paths, allowed, password, username=username))
     log(f"dashboard on http://{host}:{port}  (auth {'on (user: ' + username + ')' if password else 'off, loopback only'}). Ctrl+C to stop.")
     try:

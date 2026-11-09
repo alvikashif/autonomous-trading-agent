@@ -289,7 +289,12 @@ def cmd_dashboard(args, cfg) -> None:
         "ai_signals": cfg.universe.ai_signals_json,
         "kill_switch": cfg.universe.kill_switch_json,
     }
-    serve(cfg, paths, host=args.host, port=args.port, extra_hosts=tuple(args.allow_host or ()))
+    extra = []
+    for h in (args.allow_host or []):
+        for part in h.split(','):
+            if part.strip():
+                extra.append(part.strip())
+    serve(cfg, paths, host=args.host, port=args.port, extra_hosts=tuple(extra))
 
 
 def cmd_kill_switch(args, cfg) -> None:
