@@ -96,7 +96,29 @@ def extract_technical_candidates(
 
     # Sort primarily by 60-day return momentum, take top candidates
     candidates.sort(key=lambda x: x["ret_60d_pct"], reverse=True)
-    return candidates[:max_candidates]
+    top_candidates = candidates[:max_candidates]
+
+    # Enrich candidates with multi-quarter fundamentals, profit growth & news
+    try:
+        from .research import get_cached_research
+        for c in top_candidates:
+            sym = c["symbol"]
+            res = get_cached_research(sym)
+            prof = res.get("profile", {})
+            news = res.get("news", [])
+            c["qoq_profit_growth_pct"] = prof.get("qoq_profit_growth_pct")
+            c["qoq_revenue_growth_pct"] = prof.get("qoq_revenue_growth_pct")
+            c["yoy_profit_growth_pct"] = prof.get("yoy_profit_growth_pct")
+            c["yoy_revenue_growth_pct"] = prof.get("yoy_revenue_growth_pct")
+            c["operating_margin_pct"] = prof.get("operating_margin_pct")
+            c["pe_ratio"] = prof.get("pe_ratio")
+            c["forward_pe"] = prof.get("forward_pe")
+            c["annual_history"] = prof.get("annual_history", [])[:3]
+            c["recent_news"] = [n.get("title", "") for n in news[:3]]
+    except Exception as err:
+        logger.debug(f"Candidate research enrichment skipped: {err}")
+
+    return top_candidates
 
 
 def build_analysis_prompt(
@@ -120,16 +142,18 @@ Fixed Rules:
 - LONG ONLY, Delivery (CNC), NSE cash equities.
 - NO shorting, NO margin/leverage, NO intraday, NO F&O.
 - Target: +{target_pct:.0%} profit.
-- Stop Loss: -{stop_pct:.0%} strict stop.
+- Stop Loss: -{stop_pct:.0%} initial risk trigger (supports AI consultation at stop-loss).
 - Max Holding Period: 10 trading days.
 - Minimum Conviction Score required to trade: {min_confidence}/10.
 
-Here are the pre-screened, 100% Shariah-compliant breakout candidates (price, moving averages, 5d/20d/60d returns, RSI 14, and fundamentals):
+Here are the pre-screened, 100% Shariah-compliant breakout candidates with price action, moving averages, multi-quarter QoQ/YoY profit growth, annual financial history, and recent company news:
 {candidates_table}
 
-YOUR MISSION:
-1. Review each candidate with extreme skepticism. Be aware of overbought RSI (>75-80), sudden momentum exhaustion, or weak risk/reward.
-2. Select the SINGLE highest-conviction setup for immediate entry, OR declare 'PASS' (no trade) if none meet the {min_confidence}/10 bar or if market conditions pose high drawdown risk.
+YOUR MISSION & EVALUATION GUIDELINES:
+1. Multi-Quarter Fundamental Trajectory: Pay special attention to candidates with strong quarterly profit and revenue expansion (e.g. QoQ PAT > 20%, YoY PAT > 30%) and stable operating margins. A company with accelerating earnings and steady multi-year history has high probability of sustained upward trend.
+2. News & Corporate Catalysts: Review recent company news and earnings call updates. Strong earnings beats or capacity additions justify high conviction.
+3. Overbought vs Breakout Retest: Differentiate between low-quality parabolic blow-offs (RSI > 80-85 without earnings backing) vs legitimate breakouts supported by fundamental inflection.
+4. Select the SINGLE highest-conviction setup for immediate entry, OR declare 'PASS' (no trade) if none meet the {min_confidence}/10 bar or if market conditions pose high drawdown risk.
 3. For the selected stock (if any), compute:
    - entry_price: current market close price
    - target_price: entry_price * (1 + {target_pct})
@@ -625,3 +649,117 @@ def evaluate_take_profit(
             "confidence_score": 10.0,
             "reason": f"Default safety exit: Target reached; AI query error ({e}).",
         }
+
+
+def build_stop_loss_prompt(
+    holding: dict[str, Any],
+    technicals: dict[str, Any],
+    research: dict[str, Any] | None = None,
+    hard_stop_pct: float = 0.07,
+) -> str:
+    """Build prompt when a position hits its initial -4% stop to evaluate if room should be given or cut now."""
+    sym = holding.get("symbol", "")
+    entry_px = float(holding.get("entry_price", holding.get("entry_px", 0.0)))
+    cur_px = float(holding.get("current_price", holding.get("last", entry_px)))
+    loss_pct = (cur_px / entry_px - 1) if entry_px > 0 else 0.0
+    initial_stop = float(holding.get("stop_loss", entry_px * 0.96))
+    profile = (research or {}).get("profile", {})
+    news = (research or {}).get("news", [])
+
+    news_text = "\n".join([f"- [{n.get('source', 'News')}] {n.get('title', '')} ({n.get('published', '')})" for n in news[:4]]) if news else "No adverse news reported."
+    ann_hist = json.dumps(profile.get("annual_history", []))
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M IST")
+
+    return f"""You are the Chief Risk Officer and Quantitative Swing Portfolio Brain for a disciplined, Shariah-compliant fund.
+Evaluation Timestamp: {now_str}
+A live holding ({sym}) has reached its initial risk trigger (-4.0% drop).
+
+POSITION STATUS:
+- Symbol: {sym}
+- Entry Price: Rs {entry_px:.2f}
+- Current Market Price: Rs {cur_px:.2f}
+- Drawdown from Entry: {loss_pct * 100:.1f}%
+- Initial Stop-Loss Level: Rs {initial_stop:.2f}
+
+TECHNICAL HEALTH & STRUCTURE:
+- 50-day SMA: Rs {technicals.get('sma_50', 'N/A')}
+- 200-day SMA: Rs {technicals.get('sma_200', 'N/A')}
+- Distance to 50-day SMA: {technicals.get('pct_above_50sma', 'N/A')}%
+- 14-day RSI: {technicals.get('rsi_14', 'N/A')}
+- Prior 20-day High (Breakout Level): Rs {technicals.get('high_20d', 'N/A')}
+
+MULTI-QUARTER FINANCIAL PERFORMANCE (PAST TRAJECTORY):
+- Latest QoQ Profit Growth: {profile.get('qoq_profit_growth_pct', 'N/A')}%
+- Latest QoQ Revenue Growth: {profile.get('qoq_revenue_growth_pct', 'N/A')}%
+- Latest YoY Profit Growth: {profile.get('yoy_profit_growth_pct', 'N/A')}%
+- Latest YoY Revenue Growth: {profile.get('yoy_revenue_growth_pct', 'N/A')}%
+- Operating Margin: {profile.get('operating_margin_pct', 'N/A')}%
+- Trailing P/E: {profile.get('pe_ratio', 'N/A')} · Forward P/E: {profile.get('forward_pe', 'N/A')}
+- 4-Year Annual Revenue & Net Profit History: {ann_hist}
+
+RECENT COMPANY NEWS & CORPORATE ANNOUNCEMENTS:
+{news_text}
+
+CRITICAL STRATEGIC RISK DECISION:
+We want to avoid prematurely shaking out of high-quality steady compounders during routine market pullbacks or tests of key support before an upward resumption, while strictly preventing catastrophic losses.
+
+Evaluate whether:
+1. 'HOLD_AND_GIVE_ROOM': The dip is a normal, healthy pullback or shakeout testing key support (e.g., 50-day SMA or prior breakout level), the company's multi-quarter earnings and fundamentals remain strong, and there are NO adverse corporate/regulatory developments. Recommend a revised structural stop-loss (cannot be below the -{hard_stop_pct * 100:.0%} maximum drawdown limit of Rs {entry_px * (1 - hard_stop_pct):.2f}).
+2. 'EXIT_CUT_LOSS': Technical breakdown below key support, distribution volume, or thesis invalidation. Sell immediately to preserve capital.
+
+OUTPUT FORMAT (Respond with ONLY a single valid JSON object):
+{{
+  "symbol": "{sym}",
+  "decision": "HOLD_AND_GIVE_ROOM" | "EXIT_CUT_LOSS",
+  "confidence_score": 8.5,
+  "reason": "Clear 2-sentence explanation of why to hold through the dip or exit now.",
+  "revised_stop_loss": {round(max(cur_px * 0.98, entry_px * (1 - hard_stop_pct)), 2)},
+  "revised_stop_pct": -0.06,
+  "support_level_tested": "50 SMA / Breakout Retest"
+}}
+"""
+
+
+def evaluate_stop_loss(
+    holding: dict[str, Any],
+    technicals: dict[str, Any],
+    research: dict[str, Any] | None,
+    ai_config: AIBrainConfig,
+    hard_stop_pct: float = 0.07,
+) -> dict[str, Any]:
+    """Query AI Brain at stop loss to decide if position should be held through a dip or exited."""
+    prompt = build_stop_loss_prompt(holding, technicals, research, hard_stop_pct=hard_stop_pct)
+    provider = ai_config.resolved_provider()
+    model = ai_config.resolved_model()
+    api_key = ai_config.resolved_api_key()
+
+    if not api_key:
+        logger.warning("No API key configured for AI stop evaluation. Defaulting to EXIT_CUT_LOSS.")
+        return {
+            "symbol": holding.get("symbol"),
+            "decision": "EXIT_CUT_LOSS",
+            "confidence_score": 10.0,
+            "reason": "Default safety exit: Stop reached, no AI API key configured.",
+        }
+
+    try:
+        raw = query_llm(prompt, provider, model, api_key)
+        parsed = clean_json_response(raw)
+        dec = parsed.get("decision", "EXIT_CUT_LOSS").upper()
+        if dec not in ("HOLD_AND_GIVE_ROOM", "EXIT_CUT_LOSS"):
+            dec = "EXIT_CUT_LOSS"
+        parsed["decision"] = dec
+        parsed["provider"] = provider
+        parsed["model"] = model
+        parsed["evaluated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M IST")
+        return parsed
+    except Exception as e:
+        logger.error("Failed to query AI brain for stop loss decision: %s. Defaulting to EXIT_CUT_LOSS.", e)
+        return {
+            "symbol": holding.get("symbol"),
+            "decision": "EXIT_CUT_LOSS",
+            "confidence_score": 10.0,
+            "reason": f"Default safety exit: AI query error ({e}).",
+        }
+

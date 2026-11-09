@@ -1960,6 +1960,7 @@ footer {
     </div>
     <div id="aisum" class="ai-summary-bar"></div>
     <div id="aitrade" class="trade-box"></div>
+    <div id="aicandidates" style="margin-top:14px;border-top:1px solid #1e293b;padding-top:12px"></div>
   </div>
 
   <!-- Active Holdings Table -->
@@ -2541,6 +2542,71 @@ function renderAI(ai, budget) {
       maxBox.appendChild(rowDiv);
     }
     tr.appendChild(maxBox);
+  }
+
+  // AI Stop-Loss Risk Consultation Advisor
+  if (ai.stop_consultations && Object.keys(ai.stop_consultations).length) {
+    const slBox = el('div', 'maximizer-box');
+    slBox.style.marginTop = '10px';
+    slBox.style.background = 'rgba(15, 23, 42, 0.6)';
+    slBox.style.border = '1px solid #1e293b';
+    slBox.innerHTML = '<div class="maximizer-head" style="color:#f59e0b"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> AI Stop-Loss Risk Consultation Advisor</div>';
+    for (const [sym, ev] of Object.entries(ai.stop_consultations)) {
+      const isHold = ev.decision === 'HOLD_AND_GIVE_ROOM';
+      const rowDiv = el('div', isHold ? 'up' : 'down');
+      rowDiv.style.fontSize = '13px';
+      rowDiv.style.marginTop = '4px';
+      rowDiv.innerHTML = `<strong>${sym}</strong>: <span class="pill" style="font-size:10px;padding:1px 6px;background:${isHold ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.2)'};color:${isHold ? '#38bdf8' : '#f87171'}">${ev.decision}</span> · ${ev.reason || ''} ` +
+        (ev.revised_stop_loss ? `<span class="pill" style="background:#091410;color:#34d399;margin-left:6px">Revised Structural Stop: Rs ${px(ev.revised_stop_loss)}</span>` : '');
+      slBox.appendChild(rowDiv);
+    }
+    tr.appendChild(slBox);
+  }
+
+  // AI Evaluated Candidates & Multi-Quarter Screening
+  const candsDiv = document.getElementById('aicandidates');
+  if (candsDiv) {
+    candsDiv.replaceChildren();
+    if (ai.evaluated_candidates && ai.evaluated_candidates.length) {
+      const cHead = el('div', '', '');
+      cHead.style.display = 'flex';
+      cHead.style.justifyContent = 'space-between';
+      cHead.style.alignItems = 'center';
+      cHead.style.marginBottom = '8px';
+      cHead.innerHTML = `
+        <span style="font-weight:600;font-size:13px;color:var(--txt);display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Evaluated Screening Candidates (${ai.evaluated_candidates.length})
+        </span>
+        <span class="pill" style="font-size:10px;padding:1px 6px;color:var(--mute)">Multi-Quarter & News Screened</span>
+      `;
+      candsDiv.appendChild(cHead);
+
+      const cGrid = el('div', '', '');
+      cGrid.style.display = 'flex';
+      cGrid.style.flexDirection = 'column';
+      cGrid.style.gap = '6px';
+
+      ai.evaluated_candidates.forEach(c => {
+        const item = el('div', '', '');
+        item.style.padding = '8px 10px';
+        item.style.background = 'rgba(2, 6, 23, 0.4)';
+        item.style.border = '1px solid #1e293b';
+        item.style.borderRadius = '6px';
+        item.style.fontSize = '12px';
+
+        const isSel = c.verdict === 'SELECTED';
+        item.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span style="font-weight:700;color:var(--txt)">${c.symbol}</span>
+            <span class="pill" style="font-size:9px;padding:1px 6px;background:${isSel ? 'rgba(16,185,129,0.2)' : 'rgba(148,163,184,0.1)'};color:${isSel ? '#34d399' : '#94a3b8'}">${c.verdict}</span>
+          </div>
+          <div style="color:var(--mute);line-height:1.4">${c.reason || ''}</div>
+        `;
+        cGrid.appendChild(item);
+      });
+      candsDiv.appendChild(cGrid);
+    }
   }
 }
 

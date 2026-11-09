@@ -186,11 +186,84 @@ def run_once(
 
             stamp = now.isoformat(timespec="seconds")
 
-            # 1. Mid-Day Stop-Loss Breach
+            # 1. Mid-Day Stop-Loss Breach & AI Brain Consultation
             if cur_px <= stop_px:
                 ev_detail = f"Mid-day price Rs {cur_px:.2f} <= stop Rs {stop_px:.2f} (loss {(cur_px/entry_px-1)*100:.1f}%)"
                 new_events.append(Event("AI_STOP_HIT", ai_symbol, ev_detail))
-                if act:
+
+                already_consulted = selected.get("stop_consulted", False)
+                hard_stop_px = entry_px * (1.0 - float(getattr(ai_cfg, "hard_stop_pct", 0.07))) if ai_cfg else entry_px * 0.93
+
+                # Consult AI Brain on whether to hold through normal pullback or cut loss
+                should_consult = (
+                    not already_consulted
+                    and cur_px > hard_stop_px
+                    and ai_cfg
+                    and hasattr(ai_cfg, "resolved_api_key")
+                    and bool(ai_cfg.resolved_api_key())
+                )
+
+                ai_decision = "EXIT_CUT_LOSS"
+                eval_payload = None
+
+                if should_consult:
+                    try:
+                        from .ai_brain import evaluate_stop_loss
+                        from .research import get_cached_research
+                        res_data = get_cached_research(ai_symbol, base_dir=status_file.parent)
+                        holding_info = {
+                            "symbol": ai_symbol,
+                            "entry_price": entry_px,
+                            "current_price": cur_px,
+                            "loss_pct": (cur_px / entry_px - 1),
+                            "stop_loss": stop_px,
+                        }
+                        tech_info = {
+                            "sma_50": selected.get("sma_50"),
+                            "sma_200": selected.get("sma_200"),
+                            "high_20d": selected.get("high_20d"),
+                            "rsi_14": selected.get("rsi_14"),
+                            "pct_above_50sma": selected.get("pct_above_50sma"),
+                        }
+                        eval_payload = evaluate_stop_loss(holding_info, tech_info, res_data, ai_cfg)
+                        ai_decision = eval_payload.get("decision", "EXIT_CUT_LOSS")
+                        ai_sig.setdefault("stop_consultations", {})[ai_symbol] = eval_payload
+                    except Exception as err:
+                        logger.error("AI Brain stop-loss consultation failed: %s", err)
+
+                if should_consult and ai_decision == "HOLD_AND_GIVE_ROOM" and eval_payload:
+                    # AI recommends holding through dip; revise stop loss
+                    rev_stop = float(eval_payload.get("revised_stop_loss") or (entry_px * 0.94))
+                    rev_stop = max(rev_stop, hard_stop_px)
+                    selected["stop_loss"] = rev_stop
+                    selected["stop_consulted"] = True
+                    selected["stop_consultation_time"] = stamp
+                    selected["stop_consultation_reason"] = eval_payload.get("reason", "")
+                    ai_sig["selected_trade"] = selected
+                    _save(ai_signals_path, ai_sig)
+
+                    alerts.append({
+                        "ts": stamp,
+                        "kind": "AI_STOP_ROOM_GIVEN",
+                        "symbol": ai_symbol,
+                        "detail": f"AI advised hold through dip: Revised Stop Rs {rev_stop:.2f} ({eval_payload.get('reason', '')})",
+                    })
+                    try:
+                        from .notify import dispatch_notification
+                        dispatch_notification(
+                            event_type="alert",
+                            title=f"AI STOP CONSULTATION: {ai_symbol}",
+                            message=(
+                                f"Dip to Rs {cur_px:.2f} ({(cur_px/entry_px-1)*100:.1f}%). AI Brain recommends HOLD_AND_GIVE_ROOM (Confidence: {eval_payload.get('confidence_score', 8)}/10).\n"
+                                f"• Revised Stop: Rs {rev_stop:.2f}\n"
+                                f"• Analysis: {eval_payload.get('reason', '')}"
+                            ),
+                            details={"symbol": ai_symbol, "action": "HOLD", "revised_stop": rev_stop, "confidence": eval_payload.get("confidence_score")},
+                            path=status_file.parent / "notifications.json",
+                        )
+                    except Exception as e:
+                        logger.debug(f"Notification error: {e}")
+                elif act:
                     from .kill_switch import is_kill_switch_active
                     if is_kill_switch_active(kill_switch_path):
                         alerts.append({"ts": stamp, "kind": "KILL_SWITCH_BLOCKED", "symbol": ai_symbol,
@@ -199,12 +272,14 @@ def run_once(
                         active_broker = broker if (live_mode and broker) else paper_broker
                         sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
                         active_broker.place_order(sell_order)
+                        exit_reason = eval_payload.get("reason") if eval_payload else "Breached stop-loss floor."
                         selected["exit"] = {
                             "type": "STOP_LOSS",
                             "price": cur_px,
                             "timestamp": stamp,
                             "qty": ai_qty,
                             "pnl_pct": (cur_px / entry_px - 1),
+                            "ai_reason": exit_reason,
                         }
                         ai_sig["selected_trade"] = selected
                         _save(ai_signals_path, ai_sig)
@@ -219,7 +294,7 @@ def run_once(
                             dispatch_notification(
                                 event_type="stop_loss",
                                 title=f"STOP LOSS EXECUTED: {ai_symbol}",
-                                message=f"Position breached -4.0% stop. Sold {ai_qty} shares @ Rs {cur_px:.2f} (Loss: {(cur_px/entry_px-1)*100:.1f}%) [{'LIVE' if live_mode else 'PAPER'}]",
+                                message=f"Sold {ai_qty} shares @ Rs {cur_px:.2f} (Loss: {(cur_px/entry_px-1)*100:.1f}%) [{'LIVE' if live_mode else 'PAPER'}]. Reason: {exit_reason}",
                                 details={"symbol": ai_symbol, "qty": ai_qty, "price": cur_px, "pnl_pct": (cur_px/entry_px-1)},
                                 path=status_file.parent / "notifications.json",
                             )

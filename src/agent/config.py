@@ -89,7 +89,8 @@ class AIBrainConfig:
     max_allocation: float = 5000.0  # max rupees per position (e.g. Rs 5k test)
     max_positions: int = 1      # max concurrent swing positions
     target_pct: float = 0.08    # +8% profit target
-    stop_pct: float = 0.04      # -4% stop loss
+    stop_pct: float = 0.04      # -4% stop loss (triggers AI stop consultation)
+    hard_stop_pct: float = 0.07 # -7% maximum hard loss floor (absolute safety cutoff)
     max_hold_days: int = 10     # exit after 10 trading days
 
     def resolved_provider(self) -> str:
