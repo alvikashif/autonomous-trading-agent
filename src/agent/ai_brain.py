@@ -125,25 +125,27 @@ def build_analysis_prompt(
     candidates: list[dict[str, Any]],
     capital: float,
     min_confidence: float = 8.0,
-    target_pct: float = 0.08,
+    target_pct: float = 0.20,
     stop_pct: float = 0.04,
     benchmark_trend: str = "neutral",
+    max_hold_days: int = 60,
 ) -> str:
-    """Build the prompt instructing the LLM to act as a disciplined research analyst."""
+    """Build the prompt instructing the LLM to act as a disciplined research analyst targeting 20-30% multi-month compounding."""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M IST")
 
     candidates_table = json.dumps(candidates, indent=2)
 
-    return f"""You are the quantitative trading analyst and lead portfolio brain for a disciplined, Shariah-compliant swing trading fund.
+    return f"""You are the quantitative trading analyst and lead portfolio brain for a disciplined, Shariah-compliant multi-month growth compounding fund.
 Scan Timestamp: {now_str}
 Benchmark Market Trend: {benchmark_trend}
-Available Capital for this Test Trade: Rs {capital:,.0f}
+Available Capital for this Allocation: Rs {capital:,.0f}
+Strategy Horizon: Patient Multi-Month Position Holding (Targeting +20% to +30%+ compounding).
 Fixed Rules:
 - LONG ONLY, Delivery (CNC), NSE cash equities.
 - NO shorting, NO margin/leverage, NO intraday, NO F&O.
-- Target: +{target_pct:.0%} profit.
+- Target: +{target_pct:.0%} core profit target (with staged trailing up to +30%+).
 - Stop Loss: -{stop_pct:.0%} initial risk trigger (supports AI consultation at stop-loss).
-- Max Holding Period: 10 trading days.
+- Holding Period: Up to {max_hold_days} trading days (patient multi-month compounding; trail winners).
 - Minimum Conviction Score required to trade: {min_confidence}/10.
 
 Here are the pre-screened, 100% Shariah-compliant breakout candidates with price action, moving averages, multi-quarter QoQ/YoY profit growth, annual financial history, and recent company news:
@@ -151,15 +153,16 @@ Here are the pre-screened, 100% Shariah-compliant breakout candidates with price
 
 YOUR MISSION & EVALUATION GUIDELINES:
 1. Multi-Quarter Fundamental Trajectory: Pay special attention to candidates with strong quarterly profit and revenue expansion (e.g. QoQ PAT > 20%, YoY PAT > 30%) and stable operating margins. A company with accelerating earnings and steady multi-year history has high probability of sustained upward trend.
-2. News & Corporate Catalysts: Review recent company news and earnings call updates. Strong earnings beats or capacity additions justify high conviction.
-3. Overbought vs Breakout Retest: Differentiate between low-quality parabolic blow-offs (RSI > 80-85 without earnings backing) vs legitimate breakouts supported by fundamental inflection.
-4. Select the SINGLE highest-conviction setup for immediate entry, OR declare 'PASS' (no trade) if none meet the {min_confidence}/10 bar or if market conditions pose high drawdown risk.
-3. For the selected stock (if any), compute:
+2. Long-Term Compounder Potential: Identify institutions capable of generating 20% to 30%+ returns over a 2 to 6 month horizon based on capacity expansion, sector tailwinds, or accelerating earnings.
+3. News & Corporate Catalysts: Review recent company news and earnings call updates. Strong earnings beats or capacity additions justify high conviction.
+4. Overbought vs Breakout Retest: Differentiate between low-quality parabolic blow-offs (RSI > 80-85 without earnings backing) vs legitimate breakouts supported by fundamental inflection.
+5. Select the SINGLE highest-conviction setup for immediate entry, OR declare 'PASS' (no trade) if none meet the {min_confidence}/10 bar or if market conditions pose high drawdown risk.
+6. For the selected stock (if any), compute:
    - entry_price: current market close price
    - target_price: entry_price * (1 + {target_pct})
    - stop_loss: entry_price * (1 - {stop_pct})
    - confidence_score: from 1.0 to 10.0
-4. Formulate a crisp thesis and identify explicit risks/catalysts.
+7. Formulate a crisp thesis and identify explicit risks/catalysts.
 
 OUTPUT FORMAT:
 You MUST reply with ONLY a single valid JSON object, without conversational fluff. The JSON must adhere to this schema:
@@ -173,11 +176,11 @@ You MUST reply with ONLY a single valid JSON object, without conversational fluf
     "action": "BUY",
     "current_price": 1234.50,
     "entry_price": 1234.50,
-    "target_price": 1333.25,
+    "target_price": 1481.40,
     "target_pct": {target_pct},
     "stop_loss": 1185.12,
     "stop_pct": {stop_pct},
-    "max_hold_days": 10,
+    "max_hold_days": {max_hold_days},
     "confidence_score": 8.5,
     "thesis": "Specific technical and fundamental reason for this trade...",
     "catalysts": ["catalyst 1", "catalyst 2"],
@@ -558,9 +561,9 @@ def get_symbol_technicals(symbol: str, prices_df: pd.DataFrame) -> dict[str, Any
 def build_take_profit_prompt(
     holding: dict[str, Any],
     technicals: dict[str, Any],
-    target_pct: float = 0.08,
+    target_pct: float = 0.20,
 ) -> str:
-    """Build prompt when a position hits its target gain to decide whether to take profit or trail higher."""
+    """Build prompt when a position hits its milestone gain to decide whether to take profit or trail higher for multi-month compounding."""
     sym = holding.get("symbol", "")
     entry_px = float(holding.get("entry_price", holding.get("entry_px", 0.0)))
     cur_px = float(holding.get("current_price", holding.get("last", entry_px)))
@@ -569,9 +572,9 @@ def build_take_profit_prompt(
 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M IST")
 
-    return f"""You are the lead portfolio risk manager for a disciplined swing trading fund.
+    return f"""You are the lead portfolio risk manager for a disciplined growth compounding fund targeting 20-30%+ returns.
 Evaluation Timestamp: {now_str}
-A currently held stock ({sym}) has reached its profit target of +{target_pct:.0%}.
+A currently held stock ({sym}) has reached a significant gain milestone (Unrealized P&L: +{gain_pct * 100:.1f}%).
 
 POSITION STATUS:
 - Symbol: {sym}
@@ -587,25 +590,28 @@ CURRENT TECHNICAL INDICATORS:
 - 20-day Return: {technicals.get('ret_20d_pct', 0.0):.1f}%
 - Distance from 20-day High: {technicals.get('pct_from_20d_high', 0.0):.1f}%
 
-CRITICAL STRATEGIC DECISION:
-The position has hit its target gain. Should we:
-1. 'TAKE_PROFIT': Lock in the profit now. Choose this if RSI is overbought (>75-80), momentum is exhausting, or risk of a sharp mean-reversion pullback is high.
-2. 'HOLD_AND_TRAIL': Let the winner run to maximize profit in this trade. Choose this ONLY if momentum is accelerating, the breakout has powerful continuation, and higher gains (+12% to +15%) are achievable.
+CRITICAL STRATEGIC DECISION (MULTI-MONTH COMPOUNDING):
+The fund owner is patient and aims for significant 20% to 30%+ compounding profits on fundamentally strong institutions, rather than selling prematurely for minor gains.
+Should we:
+1. 'TAKE_PROFIT': Lock in all profits now. Choose this ONLY if RSI is blown out (>80-85), quarterly earnings momentum has reversed, or extreme cyclical distribution is evident.
+2. 'HOLD_AND_TRAIL': Let the winner compound into a multi-month multi-bagger runner (+20% to +35%+). Choose this if quarterly earnings growth is accelerating, moving averages are stacked bullishly, and the company has long-term tailwinds.
    If HOLD_AND_TRAIL is chosen, you MUST provide:
-   - revised_target_pct: extended target (e.g. 0.12 or 0.15 for +12% to +15%)
-   - trailing_stop_pct: guaranteed lock-in stop (e.g. 0.05 to protect at least +5% gain)
+   - revised_target_pct: extended target (e.g. 0.25 or 0.35 for +25% to +35%)
+   - trailing_stop_pct: guaranteed lock-in stop (e.g. 0.06 to 0.12 to lock in accrued profits)
+   - capital_scaling_advice: specific advice on whether the investor should allocate additional monthly savings (e.g. Rs 5,000) to scale this winning position.
 
 OUTPUT FORMAT (Respond with ONLY a single valid JSON object):
 {{
   "symbol": "{sym}",
   "decision": "TAKE_PROFIT" | "HOLD_AND_TRAIL",
   "confidence_score": 8.5,
-  "reason": "Clear 1-2 sentence technical reason for decision",
-  "revised_target_pct": 0.12,
-  "revised_target_price": {cur_px * 1.04:.2f},
-  "trailing_stop_pct": 0.05,
-  "trailing_stop_price": {entry_px * 1.05:.2f},
-  "max_additional_days": 5
+  "reason": "Clear 1-2 sentence fundamental and technical reason for decision",
+  "revised_target_pct": 0.25,
+  "revised_target_price": {cur_px * 1.15:.2f},
+  "trailing_stop_pct": 0.08,
+  "trailing_stop_price": {entry_px * 1.08:.2f},
+  "max_additional_days": 30,
+  "capital_scaling_advice": "Strong quarterly earnings acceleration confirms compounder status. Recommended for adding an additional tranche of capital from monthly savings."
 }}
 """
 

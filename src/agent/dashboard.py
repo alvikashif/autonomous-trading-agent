@@ -2519,14 +2519,23 @@ function renderAI(ai, budget) {
     const mGrid = el('div', 'trade-metrics');
     mGrid.innerHTML = `
       <div class="metric-box"><div class="lbl">Entry Price</div><div class="val">${px(s.entry_price)}</div></div>
-      <div class="metric-box"><div class="lbl">Target (+8%)</div><div class="val up">${px(s.target_price)}</div></div>
-      <div class="metric-box"><div class="lbl">Stop-Loss (-4%)</div><div class="val down">${px(s.stop_loss)}</div></div>
-      <div class="metric-box"><div class="lbl">Hold Cadence</div><div class="val">${s.max_hold_days || 10} Days</div></div>
+      <div class="metric-box"><div class="lbl">Target (+${Math.round((s.target_pct || 0.20) * 100)}%)</div><div class="val up">${px(s.target_price)}</div></div>
+      <div class="metric-box"><div class="lbl">Stop-Loss (-${Math.round((s.stop_pct || 0.04) * 100)}%)</div><div class="val down">${px(s.stop_loss)}</div></div>
+      <div class="metric-box"><div class="lbl">Hold Horizon</div><div class="val">${s.max_hold_days ? s.max_hold_days + 'd Multi-Month' : 'Multi-Month'}</div></div>
     `;
     tr.appendChild(mGrid);
 
     if (s.thesis) {
       tr.appendChild(el('div', 'thesis-text', 'Thesis: ' + s.thesis));
+    }
+    if (s.capital_scaling_advice) {
+      const scaleDiv = el('div', 'pill', '💡 Capital Advice: ' + s.capital_scaling_advice);
+      scaleDiv.style.width = '100%';
+      scaleDiv.style.marginTop = '8px';
+      scaleDiv.style.background = 'rgba(16, 185, 129, 0.15)';
+      scaleDiv.style.color = '#34d399';
+      scaleDiv.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      tr.appendChild(scaleDiv);
     }
   } else {
     tr.appendChild(el('div', 'mute', 'No trade selected for execution (insufficient conviction or unfavorable market regime).'));

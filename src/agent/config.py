@@ -88,10 +88,10 @@ class AIBrainConfig:
     min_confidence: float = 8.0 # 1.0 to 10.0 scale, minimum score to consider execution
     max_allocation: float = 5000.0  # max rupees per position (e.g. Rs 5k test)
     max_positions: int = 1      # max concurrent swing positions
-    target_pct: float = 0.08    # +8% profit target
+    target_pct: float = 0.20    # +20% multi-month growth target (trailing up to +30%+)
     stop_pct: float = 0.04      # -4% stop loss (triggers AI stop consultation)
     hard_stop_pct: float = 0.07 # -7% maximum hard loss floor (absolute safety cutoff)
-    max_hold_days: int = 10     # exit after 10 trading days
+    max_hold_days: int = 60     # up to 60 trading days (multi-month patient holding)
 
     def resolved_provider(self) -> str:
         return os.environ.get("AI_PROVIDER", "").strip().lower() or self.provider.strip().lower() or "claude"
@@ -135,6 +135,20 @@ class AIBrainConfig:
             return int(val) if val else self.max_positions
         except ValueError:
             return self.max_positions
+
+    def resolved_target_pct(self) -> float:
+        val = os.environ.get("AI_TARGET_PCT", "").strip()
+        try:
+            return float(val) if val else self.target_pct
+        except ValueError:
+            return self.target_pct
+
+    def resolved_max_hold_days(self) -> int:
+        val = os.environ.get("AI_MAX_HOLD_DAYS", "").strip()
+        try:
+            return int(val) if val else self.max_hold_days
+        except ValueError:
+            return self.max_hold_days
 
 
 @dataclass(frozen=True)

@@ -329,10 +329,13 @@ def run_once(
 
                 if ai_decision == "HOLD_AND_TRAIL" and eval_payload:
                     # AI recommends trailing higher: adjust target & stop in state
-                    rev_target = eval_payload.get("revised_target_price", cur_px * 1.05)
+                    rev_target = eval_payload.get("revised_target_price", cur_px * 1.15)
                     trail_stop = eval_payload.get("trailing_stop_price", cur_px * 0.95)
+                    cap_advice = eval_payload.get("capital_scaling_advice", "")
                     selected["target_price"] = rev_target
                     selected["stop_loss"] = trail_stop
+                    if cap_advice:
+                        selected["capital_scaling_advice"] = cap_advice
                     ai_sig["selected_trade"] = selected
                     _save(ai_signals_path, ai_sig)
                     alerts.append({
@@ -341,6 +344,26 @@ def run_once(
                         "symbol": ai_symbol,
                         "detail": f"AI advised trail: Revised Target Rs {rev_target:.2f}, Trailing Stop Rs {trail_stop:.2f} ({ai_reason})",
                     })
+                    try:
+                        from .notify import dispatch_notification
+                        msg = (
+                            f"Hit milestone @ Rs {cur_px:.2f} (+{(cur_px/entry_px-1)*100:.1f}%).\n"
+                            f"• Decision: HOLD_AND_TRAIL (Multi-Month Compounding)\n"
+                            f"• Revised Target: Rs {rev_target:.2f}\n"
+                            f"• Locked-in Trailing Stop: Rs {trail_stop:.2f}\n"
+                            f"• Rationale: {ai_reason}"
+                        )
+                        if cap_advice:
+                            msg += f"\n• Capital Advice: {cap_advice}"
+                        dispatch_notification(
+                            event_type="take_profit",
+                            title=f"PROFIT TRAILED TO HIGHER TARGET: {ai_symbol}",
+                            message=msg,
+                            details={"symbol": ai_symbol, "action": "TRAIL", "target": rev_target, "stop": trail_stop},
+                            path=status_file.parent / "notifications.json",
+                        )
+                    except Exception as e:
+                        logger.debug(f"Notification error: {e}")
                 else:
                     # Execute Profit Taking
                     if act:
