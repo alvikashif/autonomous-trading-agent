@@ -749,8 +749,19 @@ label {
     border-radius: 14px;
     margin-bottom: 14px;
   }
+  .card.collapsed {
+    padding-bottom: 12px;
+  }
   .card-header {
-    margin-bottom: 12px;
+    padding: 4px 6px;
+    margin: -4px -6px 12px -6px;
+  }
+  .card.collapsed .card-header {
+    margin-bottom: 0;
+  }
+  .btn-toggle-all {
+    padding: 4px 8px;
+    font-size: 11px;
   }
   .card-title {
     font-size: 13px;
@@ -1341,6 +1352,7 @@ body {
   padding: 20px 22px;
   margin-bottom: 18px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: padding-bottom 0.2s ease;
 }
 .card-header {
   display: flex;
@@ -1349,6 +1361,23 @@ body {
   margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin: -6px -10px 14px -10px;
+  transition: background 0.18s ease;
+}
+.card-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.card-header:active {
+  background: rgba(255, 255, 255, 0.07);
+}
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .card-title {
   font-size: 14px;
@@ -1362,6 +1391,70 @@ body {
 }
 .card-title svg {
   color: var(--accent);
+}
+.btn-collapse {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: var(--mute);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+.card-header:hover .btn-collapse {
+  color: #fff;
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.12);
+}
+.btn-collapse .chevron {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card.collapsed {
+  padding-bottom: 14px;
+}
+.card.collapsed .card-header {
+  margin-bottom: 0;
+}
+.card.collapsed .card-body {
+  display: none !important;
+}
+.card.collapsed .btn-collapse .chevron {
+  transform: rotate(-90deg);
+}
+.card.collapsed .btn-collapse {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--txt);
+}
+.card-body {
+  transition: opacity 0.2s ease;
+}
+.card-body .kpi-grid {
+  margin-bottom: 0;
+}
+.btn-toggle-all {
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+.btn-toggle-all:hover {
+  background: rgba(148, 163, 184, 0.18);
+  color: #fff;
+  border-color: rgba(56, 189, 248, 0.4);
 }
 
 /* AI Spotlight Card */
@@ -1704,8 +1797,19 @@ footer {
     border-radius: 14px;
     margin-bottom: 14px;
   }
+  .card.collapsed {
+    padding-bottom: 12px;
+  }
   .card-header {
-    margin-bottom: 12px;
+    padding: 4px 6px;
+    margin: -4px -6px 12px -6px;
+  }
+  .card.collapsed .card-header {
+    margin-bottom: 0;
+  }
+  .btn-toggle-all {
+    padding: 4px 8px;
+    font-size: 11px;
   }
   .card-title {
     font-size: 13px;
@@ -1941,6 +2045,10 @@ footer {
     </div>
 
     <div class="actions-group">
+      <button id="btnToggleAll" class="btn-toggle-all" onclick="toggleAllCards()" title="Collapse / Expand All Sections">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
+        <span id="toggleAllText">Collapse All</span>
+      </button>
       <button id="btnNotif" class="btn-notif" onclick="toggleNotifications()" title="Web & App Trade Notifications">
         <span id="notifBell">🔔</span>
         <span id="notifStatusText">Alerts</span>
@@ -1987,79 +2095,129 @@ footer {
     </div>
   </div>
 
-  <!-- Hero KPI Grid -->
-  <div class="kpi-grid" id="kpis"></div>
+  <!-- Portfolio Performance & Capital Metrics -->
+  <div class="card" id="kpiCard">
+    <div class="card-header" onclick="toggleCard('kpiCard')">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Portfolio Performance & Capital Metrics</span>
+      </div>
+      <div class="card-header-actions">
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="kpi-grid" id="kpis"></div>
+    </div>
+  </div>
 
   <!-- AI Spotlight Card -->
   <div class="card ai-card" id="aicard" style="display:none">
-    <div class="card-header">
+    <div class="card-header" onclick="toggleCard('aicard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93l-.25.04v2.03h2.5a2.5 2.5 0 0 1 2.45 2l.05.25v2.5a2.5 2.5 0 0 1-2 2.45l-.25.05h-6.5a2.5 2.5 0 0 1-2.45-2l-.05-.25v-2.5a2.5 2.5 0 0 1 2-2.45l.25-.05h2.5v-2.03l-.25-.04A4 4 0 0 1 12 2z"/></svg>
         <span>AI Quantitative Analyst</span>
       </div>
-      <span id="aimodel" class="pill" style="background:#0f172a;color:#38bdf8;border-color:#1e3a5f"></span>
+      <div class="card-header-actions">
+        <span id="aimodel" class="pill" style="background:#0f172a;color:#38bdf8;border-color:#1e3a5f"></span>
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
     </div>
-    <div id="aisum" class="ai-summary-bar"></div>
-    <div id="aitrade" class="trade-box"></div>
-    <div id="aicandidates" style="margin-top:14px;border-top:1px solid #1e293b;padding-top:12px"></div>
+    <div class="card-body">
+      <div id="aisum" class="ai-summary-bar"></div>
+      <div id="aitrade" class="trade-box"></div>
+      <div id="aicandidates" style="margin-top:14px;border-top:1px solid #1e293b;padding-top:12px"></div>
+    </div>
   </div>
 
   <!-- Active Holdings Table -->
-  <div class="card">
-    <div class="card-header">
+  <div class="card" id="holdCard">
+    <div class="card-header" onclick="toggleCard('holdCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Active Portfolio Holdings</span>
       </div>
-      <div id="holdCount" class="pill" style="background:#0f172a;color:var(--mute)">0 Assets</div>
+      <div class="card-header-actions">
+        <div id="holdCount" class="pill" style="background:#0f172a;color:var(--mute)">0 Assets</div>
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="table-wrap">
-      <table id="hold"></table>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table id="hold"></table>
+      </div>
     </div>
   </div>
 
   <!-- Swing Sandbox (Paper) -->
   <div class="card" id="swingcard" style="display:none">
-    <div class="card-header">
+    <div class="card-header" onclick="toggleCard('swingcard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
         <span>Swing Sandbox (Paper Breakouts)</span>
       </div>
-      <div id="swrule" class="pill" style="background:#0f172a;color:#38bdf8">Breakout Rule</div>
+      <div class="card-header-actions">
+        <div id="swrule" class="pill" style="background:#0f172a;color:#38bdf8">Breakout Rule</div>
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
     </div>
-    <div id="swsum" style="font-size:13px;color:#cbd5e1;margin-bottom:12px;line-height:1.5"></div>
-    <div class="table-wrap">
-      <table id="swhold"></table>
-    </div>
-    <div id="swnext" class="mute" style="font-size:12px;margin:10px 0"></div>
-    <div class="table-wrap">
-      <table id="swtr"></table>
+    <div class="card-body">
+      <div id="swsum" style="font-size:13px;color:#cbd5e1;margin-bottom:12px;line-height:1.5"></div>
+      <div class="table-wrap">
+        <table id="swhold"></table>
+      </div>
+      <div id="swnext" class="mute" style="font-size:12px;margin:10px 0"></div>
+      <div class="table-wrap">
+        <table id="swtr"></table>
+      </div>
     </div>
   </div>
 
   <!-- Execution Engine & Monitor Status -->
-  <div class="card">
-    <div class="card-header">
+  <div class="card" id="monCard">
+    <div class="card-header" onclick="toggleCard('monCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         <span>Execution Engine & Real-Time Monitor</span>
       </div>
+      <div class="card-header-actions">
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
     </div>
-    <div id="mon" style="font-size:13px;line-height:1.6"></div>
-    <div id="alerts" style="margin-top:12px;font-size:12px"></div>
+    <div class="card-body">
+      <div id="mon" style="font-size:13px;line-height:1.6"></div>
+      <div id="alerts" style="margin-top:12px;font-size:12px"></div>
+    </div>
   </div>
 
   <!-- Recent Trade Orders -->
   <div class="card" id="tradesCard">
-    <div class="card-header">
+    <div class="card-header" onclick="toggleCard('tradesCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
         <span>Recent Executed Orders</span>
       </div>
-      <div id="tradesBadge" class="pill" style="display:none"></div>
+      <div class="card-header-actions">
+        <div id="tradesBadge" class="pill" style="display:none"></div>
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="table-wrap">
-      <table id="trades"></table>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table id="trades"></table>
+      </div>
     </div>
   </div>
 
@@ -2477,6 +2635,7 @@ async function load() {
       ]))
     ]);
   }
+  updateToggleAllBtn();
 }
 
 function renderAI(ai, budget) {
@@ -2791,6 +2950,61 @@ if (isIosDevice && !isStandalone && iosHint && !sessionStorage.getItem('ios_hint
   iosHint.style.display = 'flex';
 }
 
+const ALL_CARD_IDS = ['kpiCard', 'aicard', 'holdCard', 'swingcard', 'monCard', 'tradesCard'];
+
+function toggleCard(cardId, e) {
+  if (e) e.stopPropagation();
+  const c = document.getElementById(cardId);
+  if (!c) return;
+  const isCollapsed = c.classList.toggle('collapsed');
+  try {
+    localStorage.setItem('collapse_' + cardId, isCollapsed ? '1' : '0');
+  } catch (err) {}
+  updateToggleAllBtn();
+}
+
+function updateToggleAllBtn() {
+  const btn = document.getElementById('btnToggleAll');
+  const txt = document.getElementById('toggleAllText');
+  if (!btn || !txt) return;
+  const visibleCards = ALL_CARD_IDS.map(id => document.getElementById(id)).filter(c => c && c.style.display !== 'none');
+  const allCollapsed = visibleCards.length > 0 && visibleCards.every(c => c.classList.contains('collapsed'));
+  txt.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
+}
+
+function toggleAllCards() {
+  const visibleCards = ALL_CARD_IDS.map(id => document.getElementById(id)).filter(c => c && c.style.display !== 'none');
+  const anyExpanded = visibleCards.some(c => !c.classList.contains('collapsed'));
+  const targetCollapse = anyExpanded;
+  ALL_CARD_IDS.forEach(id => {
+    const c = document.getElementById(id);
+    if (!c) return;
+    if (targetCollapse) {
+      c.classList.add('collapsed');
+    } else {
+      c.classList.remove('collapsed');
+    }
+    try {
+      localStorage.setItem('collapse_' + id, targetCollapse ? '1' : '0');
+    } catch (err) {}
+  });
+  updateToggleAllBtn();
+}
+
+function restoreCardCollapseState() {
+  ALL_CARD_IDS.forEach(id => {
+    const c = document.getElementById(id);
+    if (!c) return;
+    try {
+      if (localStorage.getItem('collapse_' + id) === '1') {
+        c.classList.add('collapsed');
+      }
+    } catch (err) {}
+  });
+  updateToggleAllBtn();
+}
+
+restoreCardCollapseState();
 load();
 setInterval(load, 15000);
 </script>
