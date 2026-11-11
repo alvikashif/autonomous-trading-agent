@@ -95,13 +95,19 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
                 if n.get("type") == "buy" and n.get("details", {}).get("mode") == "LIVE":
                     det = n.get("details", {})
                     live_trades.append({
-                        "ts": n.get("timestamp", "")[:10],
+                        "ts": n.get("timestamp", "").replace("T", " ")[:19],
                         "symbol": det.get("symbol", ""),
                         "side": "BUY",
                         "qty": int(det.get("qty", 0)),
                         "fill_price": float(det.get("price", 0.0)),
                         "cost": 0.0,
                     })
+            if live_trades:
+                try:
+                    live_trades_file.parent.mkdir(parents=True, exist_ok=True)
+                    live_trades_file.write_text(json.dumps(live_trades, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
         display_trades = live_trades
         avg = average_costs(display_trades)
     else:
@@ -162,7 +168,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
             "alerts": mon.get("alerts", [])[-15:][::-1],
         },
         "screen": screen,
-        "swing": _read_json(swing_path) if swing_path else {},
+        "swing": (_read_json(swing_path) if swing_path else {}) if not is_live else {},
         "kill_switch": get_kill_switch_status(kill_switch_path or "data/kill_switch.json"),
         "ai_signals": _read_json(ai_signals_path) if ai_signals_path else {},
         "api_budget": api_budget,
@@ -2044,12 +2050,13 @@ footer {
   </div>
 
   <!-- Recent Trade Orders -->
-  <div class="card">
+  <div class="card" id="tradesCard">
     <div class="card-header">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
         <span>Recent Executed Orders</span>
       </div>
+      <div id="tradesBadge" class="pill" style="display:none"></div>
     </div>
     <div class="table-wrap">
       <table id="trades"></table>
@@ -2440,22 +2447,33 @@ async function load() {
   swing(d.swing);
 
   // Render Trades Table
+  const tBadge = document.getElementById('tradesBadge');
+  if (tBadge) {
+    if (d.broker_mode === 'live') {
+      tBadge.style.display = 'inline-block';
+      tBadge.className = 'pill up';
+      tBadge.textContent = 'LIVE GROWW CNC';
+    } else {
+      tBadge.style.display = 'none';
+    }
+  }
+
   if (!d.trades || !d.trades.length) {
     const emptyMsg = (d.broker_mode === 'live') ? 'No live executed orders yet.' : 'No historical trades recorded yet.';
     fill('trades', [
-      row(['Date', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
+      row(['Date & Time', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
       row([{ t: emptyMsg, c: 'mute' }])
     ]);
   } else {
     fill('trades', [
-      row(['Date', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
+      row(['Date & Time', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
       ...d.trades.map(t => row([
-        { t: t.ts.slice(0, 10) },
-        { t: t.symbol },
+        { t: (t.ts || '').replace('T', ' ').slice(0, 19) },
+        { t: t.symbol, c: 'bold' },
         { t: t.side, c: t.side === 'BUY' ? 'up' : 'down' },
         { t: t.qty },
         { t: px(t.fill_price) },
-        { t: px(t.cost) }
+        { t: inr(t.cost) }
       ]))
     ]);
   }
