@@ -667,6 +667,27 @@ def cmd_ai_trade(args, cfg) -> None:
     print("Groww Response:", resp)
     print("Order execution completed successfully.")
     try:
+        from datetime import datetime
+        live_trades_path = Path("data/live_trades.json")
+        live_trades_path.parent.mkdir(parents=True, exist_ok=True)
+        trades_list = []
+        if live_trades_path.is_file():
+            try:
+                trades_list = json.loads(live_trades_path.read_text(encoding="utf-8"))
+            except Exception:
+                trades_list = []
+        trades_list.append({
+            "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "symbol": symbol,
+            "side": "BUY",
+            "qty": qty,
+            "fill_price": entry_px,
+            "cost": 0.0,
+        })
+        live_trades_path.write_text(json.dumps(trades_list, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"Warning: could not write live trade log: {e}")
+    try:
         from .notify import dispatch_notification
         dispatch_notification(
             event_type="buy",

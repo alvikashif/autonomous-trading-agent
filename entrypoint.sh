@@ -33,7 +33,9 @@ case "${AGENT_ROLE:-}" in
       [ "$now" -ge "$target" ] && target=$(date -d "tomorrow 16:00" +%s)
       sleep $((target - now))
       if [ "$(date +%u)" -le 5 ]; then
-        agent paper-run --deposit || echo "paper-run failed: $?"
+        if [ "${AI_AUTO_TRADE:-false}" != "true" ]; then
+          agent paper-run --deposit || echo "paper-run failed: $?"
+        fi
         agent swing-run || echo "swing-run failed: $?"
         if [ -n "${ANTHROPIC_API_KEY:-}" ] || [ -n "${DEEPSEEK_API_KEY:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ]; then
           agent ai-scan || echo "ai-scan failed: $?"

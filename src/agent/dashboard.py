@@ -73,7 +73,41 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
     mon = _read_json(monitor_path)
     positions: dict[str, int] = {k: int(v) for k, v in state.get("positions", {}).items() if int(v) > 0}
     trades = state.get("trades", [])
-    avg = average_costs(trades)
+
+    if mon.get("live_mode") is True:
+        broker_mode = "live"
+    is_live = (broker_mode == "live")
+    mode_text = "LIVE (Groww API, CNC delivery)" if is_live else "PAPER (simulated, no real orders)"
+
+    if is_live:
+        # In live mode, only return real live executed trades; never dummy paper simulation trades.
+        live_trades_file = Path("data/live_trades.json")
+        live_trades = []
+        if live_trades_file.is_file():
+            try:
+                live_trades = json.loads(live_trades_file.read_text(encoding="utf-8"))
+            except Exception:
+                live_trades = []
+        if not live_trades:
+            # Backfill from notifications if any live order was executed
+            notifs = _get_recent_notifications()
+            for n in notifs:
+                if n.get("type") == "buy" and n.get("details", {}).get("mode") == "LIVE":
+                    det = n.get("details", {})
+                    live_trades.append({
+                        "ts": n.get("timestamp", "")[:10],
+                        "symbol": det.get("symbol", ""),
+                        "side": "BUY",
+                        "qty": int(det.get("qty", 0)),
+                        "fill_price": float(det.get("price", 0.0)),
+                        "cost": 0.0,
+                    })
+        display_trades = live_trades
+        avg = average_costs(display_trades)
+    else:
+        display_trades = trades[-25:][::-1]
+        avg = average_costs(trades)
+
     fallback = _last_closes(prices_cache, list(positions))
     quotes = mon.get("quotes", {})
     peaks = mon.get("peaks", {})
@@ -103,9 +137,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         screen = {"compliant": int(rep["compliant"].sum()), "total": int(len(rep))}
     except (OSError, ValueError, KeyError):
         pass
-    if mon.get("live_mode") is True:
-        broker_mode = "live"
-    mode_text = "LIVE (Groww API, CNC delivery)" if broker_mode == "live" else "PAPER (simulated, no real orders)"
+
     try:
         from .api_tracker import load_api_usage
         api_budget = load_api_usage()
@@ -121,11 +153,12 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "pnl_pct": (equity / deposited - 1) if deposited else None,
         "total_costs": state.get("total_costs", 0.0),
         "holdings": holdings,
-        "trades": trades[-25:][::-1],
+        "trades": display_trades,
         "last_rebalance": last_reb, "next_rebalance": nxt,
         "monitor": {
             "heartbeat": mon.get("heartbeat"), "market_open": mon.get("market_open"),
             "stop_pct": mon.get("stop_pct"), "act": mon.get("act"),
+            "live_mode": is_live,
             "alerts": mon.get("alerts", [])[-15:][::-1],
         },
         "screen": screen,
@@ -2382,7 +2415,7 @@ async function load() {
   mon.replaceChildren();
   if (m.heartbeat) {
     mon.appendChild(el('div', '', `Heartbeat: ${m.heartbeat.replace('T', ' ')} · Trailing Stop: ${m.stop_pct ? (m.stop_pct * 100) + '%' : 'Disabled'}`));
-    const isLiveExec = Boolean(m.live_mode);
+    const isLiveExec = Boolean(m.live_mode || d.broker_mode === 'live');
     const actText = isLiveExec ? 'Automatic Live Execution (Groww CNC)' : (m.act ? 'Automatic Paper Execution' : 'Alert Only (No automatic broker sell)');
     mon.appendChild(el('div', isLiveExec ? 'up' : 'mute', `Action Mode: ${actText}`));
   } else {
@@ -2408,9 +2441,10 @@ async function load() {
 
   // Render Trades Table
   if (!d.trades || !d.trades.length) {
+    const emptyMsg = (d.broker_mode === 'live') ? 'No live executed orders yet.' : 'No historical trades recorded yet.';
     fill('trades', [
       row(['Date', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
-      row([{ t: 'No historical trades recorded yet.', c: 'mute' }])
+      row([{ t: emptyMsg, c: 'mute' }])
     ]);
   } else {
     fill('trades', [

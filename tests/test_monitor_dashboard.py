@@ -236,3 +236,32 @@ def test_dashboard_login_page_session_and_custom_username(tmp_path):
     finally:
         srv.shutdown()
 
+
+def test_build_summary_live_mode_excludes_dummy_paper_trades(tmp_path):
+    paper = tmp_path / "paper.json"
+    paper.write_text(json.dumps({
+        "cash": 1000.0,
+        "positions": {"SHYAMMETL": 3},
+        "trades": [
+            {"ts": "2026-11-06", "symbol": "DUMMY1", "side": "BUY", "qty": 4, "fill_price": 200.0, "cost": 5.0},
+            {"ts": "2026-11-06", "symbol": "DUMMY2", "side": "BUY", "qty": 2, "fill_price": 400.0, "cost": 5.0},
+        ]
+    }))
+    mon = tmp_path / "mon.json"
+    mon.write_text(json.dumps({
+        "heartbeat": "2026-11-11T20:00:00+05:30",
+        "market_open": False,
+        "live_mode": True,
+        "act": True,
+    }))
+    screen = tmp_path / "screen.csv"
+    screen.write_text("symbol,compliant\nSHYAMMETL,True\n")
+    prices = tmp_path / "prices.csv"
+    prices.write_text("date,SHYAMMETL\n2026-11-06,1330.0\n")
+
+    summary = build_summary(str(paper), str(mon), str(screen), str(prices), 3, broker_mode="live")
+    assert summary["broker_mode"] == "live"
+    assert summary["monitor"]["live_mode"] is True
+    # Dummy paper trades must NOT leak into live trades list
+    assert all(t.get("symbol") not in ("DUMMY1", "DUMMY2") for t in summary["trades"])
+
