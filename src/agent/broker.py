@@ -30,6 +30,21 @@ class Broker(ABC):
     @abstractmethod
     def place_order(self, order: Order) -> Any: ...
 
+    def create_gtt_stop_loss(
+        self,
+        symbol: str,
+        qty: int,
+        trigger_price: float,
+        limit_price: float | None = None,
+    ) -> dict:
+        return {}
+
+    def cancel_gtt_order(self, smart_order_id: str) -> dict:
+        return {}
+
+    def get_gtt_orders(self, status: str = "ACTIVE") -> list[dict]:
+        return []
+
 
 def get_last_6am_ist(now: datetime | None = None) -> datetime:
     """Return the most recent 6:00 AM IST cutoff datetime."""
@@ -244,3 +259,85 @@ class GrowwBroker(Broker):
 
         resp = self._execute_with_retry(client.place_order, **kwargs)
         return resp
+
+    def create_gtt_stop_loss(
+        self,
+        symbol: str,
+        qty: int,
+        trigger_price: float,
+        limit_price: float | None = None,
+    ) -> dict:
+        """Create an emergency hard stop-loss GTT order on Groww."""
+        if qty <= 0:
+            raise ValueError(f"Invalid quantity for GTT order: {qty}")
+        if trigger_price <= 0:
+            raise ValueError(f"Invalid trigger price for GTT order: {trigger_price}")
+
+        from growwapi import GrowwAPI
+
+        client = self._ensure_client()
+        trig_px = round(round(trigger_price / 0.05) * 0.05, 2)
+        # Limit price 0.5% below trigger to ensure execution even in volatile gap
+        lim_px = round(round((limit_price if limit_price and limit_price > 0 else (trigger_price * 0.995)) / 0.05) * 0.05, 2)
+
+        order_details = {
+            "order_type": GrowwAPI.ORDER_TYPE_LIMIT,
+            "price": lim_px,
+            "transaction_type": GrowwAPI.TRANSACTION_TYPE_SELL,
+        }
+
+        logger.info(
+            f"Creating Groww GTT Stop Loss: SELL {qty} {symbol} (Trigger: Rs {trig_px:.2f}, Limit: Rs {lim_px:.2f})"
+        )
+
+        resp = self._execute_with_retry(
+            client.create_smart_order,
+            smart_order_type=GrowwAPI.SMART_ORDER_TYPE_GTT,
+            segment=GrowwAPI.SEGMENT_CASH,
+            trading_symbol=symbol.upper(),
+            quantity=int(qty),
+            product_type=GrowwAPI.PRODUCT_CNC,
+            exchange=GrowwAPI.EXCHANGE_NSE,
+            duration=GrowwAPI.VALIDITY_GTC,
+            trigger_price=str(trig_px),
+            trigger_direction=GrowwAPI.TRIGGER_DIRECTION_DOWN,
+            order=order_details,
+        )
+        return resp
+
+    def cancel_gtt_order(self, smart_order_id: str) -> dict:
+        """Cancel a GTT smart order on Groww."""
+        if not smart_order_id:
+            return {}
+
+        from growwapi import GrowwAPI
+
+        client = self._ensure_client()
+        logger.info(f"Cancelling Groww GTT order {smart_order_id}")
+        resp = self._execute_with_retry(
+            client.cancel_smart_order,
+            segment=GrowwAPI.SEGMENT_CASH,
+            smart_order_type=GrowwAPI.SMART_ORDER_TYPE_GTT,
+            smart_order_id=str(smart_order_id),
+        )
+        return resp
+
+    def get_gtt_orders(self, status: str = "ACTIVE") -> list[dict]:
+        """Fetch active GTT smart orders from Groww."""
+        from growwapi import GrowwAPI
+
+        client = self._ensure_client()
+        resp = self._execute_with_retry(
+            client.get_smart_order_list,
+            smart_order_type=GrowwAPI.SMART_ORDER_TYPE_GTT,
+            segment=GrowwAPI.SEGMENT_CASH,
+            status=status,
+        )
+        if isinstance(resp, dict):
+            for k in ("smart_orders", "payload", "data"):
+                val = resp.get(k)
+                if isinstance(val, list):
+                    return val
+                if isinstance(val, dict) and "orders" in val:
+                    return val["orders"]
+        return []

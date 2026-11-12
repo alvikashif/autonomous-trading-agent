@@ -697,6 +697,32 @@ def cmd_ai_trade(args, cfg) -> None:
     resp = broker.place_order(order)
     print("Groww Response:", resp)
     print("Order execution completed successfully.")
+
+    # Register Emergency Hard Stop GTT on Groww
+    hard_stop_pct = float(getattr(cfg.ai, "hard_stop_pct", 0.07))
+    hard_stop_px = entry_px * (1.0 - hard_stop_pct)
+    try:
+        print(f"Submitting Emergency Hard-Stop GTT to Groww: SELL {qty} {symbol} @ Trigger Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.0f}%)...")
+        gtt_resp = broker.create_gtt_stop_loss(
+            symbol=symbol,
+            qty=qty,
+            trigger_price=hard_stop_px,
+            limit_price=hard_stop_px * 0.995,
+        )
+        print("Groww GTT Response:", gtt_resp)
+        gtt_id = (
+            gtt_resp.get("smart_order_id")
+            or gtt_resp.get("order_id")
+            or gtt_resp.get("id")
+            or (gtt_resp.get("data", {}).get("smart_order_id") if isinstance(gtt_resp.get("data"), dict) else None)
+            or "ACTIVE"
+        )
+        selected["gtt_order_id"] = str(gtt_id)
+        selected["gtt_trigger_price"] = round(round(hard_stop_px / 0.05) * 0.05, 2)
+        selected["hard_stop_pct"] = hard_stop_pct
+        save_ai_signals(signals, cfg.universe.ai_signals_json)
+    except Exception as e:
+        print(f"Warning: Could not create broker-level GTT order: {e}")
     try:
         from datetime import datetime
         live_trades_path = Path("data/live_trades.json")

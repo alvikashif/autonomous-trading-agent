@@ -74,6 +74,19 @@ def test_groww_broker_mocked_calls(tmp_path, monkeypatch):
             self.orders_placed.append(kwargs)
             return {"status": "SUCCESS", "order_id": "GROWW123"}
 
+        def create_smart_order(self, **kwargs):
+            self.smart_orders_created = getattr(self, "smart_orders_created", [])
+            self.smart_orders_created.append(kwargs)
+            return {"status": "SUCCESS", "smart_order_id": "GTT999"}
+
+        def cancel_smart_order(self, **kwargs):
+            self.smart_orders_cancelled = getattr(self, "smart_orders_cancelled", [])
+            self.smart_orders_cancelled.append(kwargs)
+            return {"status": "SUCCESS"}
+
+        def get_smart_order_list(self, **kwargs):
+            return {"smart_orders": [{"smart_order_id": "GTT999", "status": "ACTIVE"}]}
+
     # Mock get_access_token
     import growwapi
     monkeypatch.setattr(
@@ -128,6 +141,25 @@ def test_groww_broker_mocked_calls(tmp_path, monkeypatch):
     placed_mkt = broker._client.orders_placed[2]
     assert placed_mkt["order_type"] == "MARKET"
     assert placed_mkt["price"] == 0.0
+
+    # Test Groww GTT Stop Loss Creation
+    gtt_resp = broker.create_gtt_stop_loss("INFY", 2, trigger_price=1674.0)
+    assert gtt_resp["smart_order_id"] == "GTT999"
+    gtt_placed = broker._client.smart_orders_created[0]
+    assert gtt_placed["trading_symbol"] == "INFY"
+    assert gtt_placed["quantity"] == 2
+    assert gtt_placed["trigger_price"] == "1674.0"
+    assert gtt_placed["smart_order_type"] == "GTT"
+    assert gtt_placed["trigger_direction"] == "DOWN"
+
+    # Test Groww GTT Order List & Cancel
+    active_gtts = broker.get_gtt_orders()
+    assert len(active_gtts) == 1
+    assert active_gtts[0]["smart_order_id"] == "GTT999"
+
+    cancel_resp = broker.cancel_gtt_order("GTT999")
+    assert cancel_resp["status"] == "SUCCESS"
+    assert broker._client.smart_orders_cancelled[0]["smart_order_id"] == "GTT999"
 
 
 def test_groww_broker_auto_reauth_on_401(tmp_path, monkeypatch):

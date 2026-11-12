@@ -16,8 +16,8 @@ from typing import Mapping
 
 logger = logging.getLogger(__name__)
 
-# Minimum seconds before allowing another remote query for the exact same symbol
-MIN_FETCH_INTERVAL = 30
+# Minimum seconds before allowing another remote query for the exact same symbol (tightened for 60s monitor loop)
+MIN_FETCH_INTERVAL = 20
 
 # In-memory quote cache: symbol -> (last_price, prev_close, timestamp)
 _QUOTE_CACHE: dict[str, tuple[float, float, float]] = {}

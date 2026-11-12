@@ -2728,13 +2728,27 @@ function renderAI(ai, budget) {
     tr.appendChild(head);
 
     const mGrid = el('div', 'trade-metrics');
+    const gttBox = s.gtt_trigger_price ?
+      `<div class="metric-box"><div class="lbl">Groww GTT Floor (-${Math.round((s.hard_stop_pct || 0.07) * 100)}%)</div><div class="val" style="color:#f87171">${px(s.gtt_trigger_price)}</div></div>` :
+      `<div class="metric-box"><div class="lbl">Hold Horizon</div><div class="val">${s.max_hold_days ? s.max_hold_days + 'd Multi-Month' : 'Multi-Month'}</div></div>`;
+
     mGrid.innerHTML = `
       <div class="metric-box"><div class="lbl">Entry Price</div><div class="val">${px(s.entry_price)}</div></div>
       <div class="metric-box"><div class="lbl">Target (+${Math.round((s.target_pct || 0.20) * 100)}%)</div><div class="val up">${px(s.target_price)}</div></div>
-      <div class="metric-box"><div class="lbl">Stop-Loss (-${Math.round((s.stop_pct || 0.04) * 100)}%)</div><div class="val down">${px(s.stop_loss)}</div></div>
-      <div class="metric-box"><div class="lbl">Hold Horizon</div><div class="val">${s.max_hold_days ? s.max_hold_days + 'd Multi-Month' : 'Multi-Month'}</div></div>
+      <div class="metric-box"><div class="lbl">Soft Stop (-${Math.round((s.stop_pct || 0.04) * 100)}%)</div><div class="val down">${px(s.stop_loss)} (AI)</div></div>
+      ${gttBox}
     `;
     tr.appendChild(mGrid);
+
+    if (s.gtt_order_id) {
+      const gttDiv = el('div', 'pill', `🛡️ Groww GTT Protected: Emergency Stop Order #${s.gtt_order_id} @ Rs ${px(s.gtt_trigger_price)} resting on exchange book`);
+      gttDiv.style.width = '100%';
+      gttDiv.style.marginTop = '8px';
+      gttDiv.style.background = 'rgba(56, 189, 248, 0.12)';
+      gttDiv.style.color = '#38bdf8';
+      gttDiv.style.borderColor = 'rgba(56, 189, 248, 0.25)';
+      tr.appendChild(gttDiv);
+    }
 
     if (s.thesis) {
       tr.appendChild(el('div', 'thesis-text', 'Thesis: ' + s.thesis));

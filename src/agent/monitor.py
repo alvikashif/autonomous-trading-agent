@@ -186,6 +186,39 @@ def run_once(
 
             stamp = now.isoformat(timespec="seconds")
 
+            # Ensure Emergency Hard Stop GTT is active on Groww exchange book
+            if live_mode and broker and hasattr(broker, "create_gtt_stop_loss") and not selected.get("gtt_order_id"):
+                hard_stop_pct = float(getattr(ai_cfg, "hard_stop_pct", 0.07)) if ai_cfg else 0.07
+                hard_stop_px = entry_px * (1.0 - hard_stop_pct)
+                try:
+                    gtt_resp = broker.create_gtt_stop_loss(
+                        symbol=ai_symbol,
+                        qty=ai_qty,
+                        trigger_price=hard_stop_px,
+                        limit_price=hard_stop_px * 0.995,
+                    )
+                    gtt_id = (
+                        gtt_resp.get("smart_order_id")
+                        or gtt_resp.get("order_id")
+                        or gtt_resp.get("id")
+                        or (gtt_resp.get("data", {}).get("smart_order_id") if isinstance(gtt_resp.get("data"), dict) else None)
+                        or "ACTIVE"
+                    )
+                    selected["gtt_order_id"] = str(gtt_id)
+                    selected["gtt_trigger_price"] = round(round(hard_stop_px / 0.05) * 0.05, 2)
+                    selected["hard_stop_pct"] = hard_stop_pct
+                    ai_sig["selected_trade"] = selected
+                    _save(ai_signals_path, ai_sig)
+                    logger.info(f"Groww GTT Safety Stop registered for {ai_qty} {ai_symbol} @ Rs {hard_stop_px:.2f} (ID: {gtt_id})")
+                    alerts.append({
+                        "ts": stamp,
+                        "kind": "GTT_STOP_PLACED",
+                        "symbol": ai_symbol,
+                        "detail": f"Emergency GTT Stop Loss placed on Groww: {ai_qty} shares @ Trigger Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.0f}%)",
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not register Groww GTT safety stop for {ai_symbol}: {e}")
+
             # 1. Mid-Day Stop-Loss Breach & AI Brain Consultation
             if cur_px <= stop_px:
                 ev_detail = f"Mid-day price Rs {cur_px:.2f} <= stop Rs {stop_px:.2f} (loss {(cur_px/entry_px-1)*100:.1f}%)"
@@ -272,6 +305,15 @@ def run_once(
                         active_broker = broker if (live_mode and broker) else paper_broker
                         sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
                         active_broker.place_order(sell_order)
+
+                        # Cancel emergency GTT order if active
+                        if live_mode and broker and hasattr(broker, "cancel_gtt_order") and selected.get("gtt_order_id"):
+                            try:
+                                broker.cancel_gtt_order(selected["gtt_order_id"])
+                                selected["gtt_order_status"] = "CANCELLED_FOR_EXIT"
+                            except Exception as ge:
+                                logger.debug(f"GTT cancel error: {ge}")
+
                         exit_reason = eval_payload.get("reason") if eval_payload else "Breached stop-loss floor."
                         selected["exit"] = {
                             "type": "STOP_LOSS",
@@ -375,6 +417,15 @@ def run_once(
                             active_broker = broker if (live_mode and broker) else paper_broker
                             sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
                             active_broker.place_order(sell_order)
+
+                            # Cancel emergency GTT order if active
+                            if live_mode and broker and hasattr(broker, "cancel_gtt_order") and selected.get("gtt_order_id"):
+                                try:
+                                    broker.cancel_gtt_order(selected["gtt_order_id"])
+                                    selected["gtt_order_status"] = "CANCELLED_FOR_EXIT"
+                                except Exception as ge:
+                                    logger.debug(f"GTT cancel error: {ge}")
+
                             selected["exit"] = {
                                 "type": "TAKE_PROFIT",
                                 "price": cur_px,
@@ -469,12 +520,12 @@ def run_forever(
     kill_switch_path: str = "data/kill_switch.json",
     log=print,
 ) -> None:
-    # Default interval: 120s during market hours (prevents cloud IP rate-limiting)
+    # Default interval: 60s during market hours (fast real-time checks)
     if open_interval is None:
         try:
-            open_interval = int(os.environ.get("MONITOR_INTERVAL", "120"))
+            open_interval = int(os.environ.get("MONITOR_INTERVAL", "60"))
         except ValueError:
-            open_interval = 120
+            open_interval = 60
 
     mode_label = "LIVE GROWW" if live_mode else "PAPER"
     log(f"Monitor started [{mode_label}]: act={act}, poll={open_interval}s open / {closed_interval}s closed.")
