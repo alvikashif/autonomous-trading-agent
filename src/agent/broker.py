@@ -203,8 +203,8 @@ class GrowwBroker(Broker):
                 holdings = resp["holdings"]
         pos: dict[str, int] = {}
         for h in holdings:
-            sym = h.get("trading_symbol", "")
-            qty = int(float(h.get("quantity", 0)))
+            sym = h.get("trading_symbol") or h.get("tradingSymbol") or h.get("symbol") or ""
+            qty = int(float(h.get("quantity") or h.get("total_quantity") or h.get("totalQuantity") or h.get("holding_quantity") or 0))
             if sym and qty > 0:
                 pos[sym.upper()] = qty
         return pos
