@@ -146,6 +146,41 @@ def run_once(
         else:
             ai_qty = selected.get("qty", 1)
 
+        # Ensure Emergency Hard Stop GTT is active on Groww exchange book whenever a live position is held
+        if live_mode and broker and hasattr(broker, "create_gtt_stop_loss") and ai_qty > 0 and not selected.get("gtt_order_id"):
+            entry_px_val = float(selected.get("entry_price", 0.0))
+            if entry_px_val > 0:
+                hard_stop_pct = float(getattr(ai_cfg, "hard_stop_pct", 0.07)) if ai_cfg else 0.07
+                hard_stop_px = entry_px_val * (1.0 - hard_stop_pct)
+                try:
+                    gtt_resp = broker.create_gtt_stop_loss(
+                        symbol=ai_symbol,
+                        qty=ai_qty,
+                        trigger_price=hard_stop_px,
+                        limit_price=hard_stop_px * 0.995,
+                    )
+                    gtt_id = (
+                        gtt_resp.get("smart_order_id")
+                        or gtt_resp.get("order_id")
+                        or gtt_resp.get("id")
+                        or (gtt_resp.get("data", {}).get("smart_order_id") if isinstance(gtt_resp.get("data"), dict) else None)
+                        or "ACTIVE"
+                    )
+                    selected["gtt_order_id"] = str(gtt_id)
+                    selected["gtt_trigger_price"] = round(round(hard_stop_px / 0.05) * 0.05, 2)
+                    selected["hard_stop_pct"] = hard_stop_pct
+                    ai_sig["selected_trade"] = selected
+                    _save(ai_signals_path, ai_sig)
+                    logger.info(f"Groww GTT Safety Stop registered for {ai_qty} {ai_symbol} @ Rs {hard_stop_px:.2f} (ID: {gtt_id})")
+                    alerts.append({
+                        "ts": now.isoformat(timespec="seconds"),
+                        "kind": "GTT_STOP_PLACED",
+                        "symbol": ai_symbol,
+                        "detail": f"Emergency GTT Stop Loss placed on Groww: {ai_qty} shares @ Trigger Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.0f}%)",
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not register Groww GTT safety stop for {ai_symbol}: {e}")
+
     # Collect all symbols needing quotes
     syms_to_quote = set(positions.keys())
     if ai_symbol and ai_qty > 0:
@@ -185,39 +220,6 @@ def run_once(
             peaks[ai_symbol] = max(peaks.get(ai_symbol, cur_px), cur_px)
 
             stamp = now.isoformat(timespec="seconds")
-
-            # Ensure Emergency Hard Stop GTT is active on Groww exchange book
-            if live_mode and broker and hasattr(broker, "create_gtt_stop_loss") and not selected.get("gtt_order_id"):
-                hard_stop_pct = float(getattr(ai_cfg, "hard_stop_pct", 0.07)) if ai_cfg else 0.07
-                hard_stop_px = entry_px * (1.0 - hard_stop_pct)
-                try:
-                    gtt_resp = broker.create_gtt_stop_loss(
-                        symbol=ai_symbol,
-                        qty=ai_qty,
-                        trigger_price=hard_stop_px,
-                        limit_price=hard_stop_px * 0.995,
-                    )
-                    gtt_id = (
-                        gtt_resp.get("smart_order_id")
-                        or gtt_resp.get("order_id")
-                        or gtt_resp.get("id")
-                        or (gtt_resp.get("data", {}).get("smart_order_id") if isinstance(gtt_resp.get("data"), dict) else None)
-                        or "ACTIVE"
-                    )
-                    selected["gtt_order_id"] = str(gtt_id)
-                    selected["gtt_trigger_price"] = round(round(hard_stop_px / 0.05) * 0.05, 2)
-                    selected["hard_stop_pct"] = hard_stop_pct
-                    ai_sig["selected_trade"] = selected
-                    _save(ai_signals_path, ai_sig)
-                    logger.info(f"Groww GTT Safety Stop registered for {ai_qty} {ai_symbol} @ Rs {hard_stop_px:.2f} (ID: {gtt_id})")
-                    alerts.append({
-                        "ts": stamp,
-                        "kind": "GTT_STOP_PLACED",
-                        "symbol": ai_symbol,
-                        "detail": f"Emergency GTT Stop Loss placed on Groww: {ai_qty} shares @ Trigger Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.0f}%)",
-                    })
-                except Exception as e:
-                    logger.warning(f"Could not register Groww GTT safety stop for {ai_symbol}: {e}")
 
             # 1. Mid-Day Stop-Loss Breach & AI Brain Consultation
             if cur_px <= stop_px:
