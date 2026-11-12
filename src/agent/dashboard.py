@@ -2556,7 +2556,7 @@ async function load() {
   if (!d.holdings.length) {
     fill('hold', [
       row(['Stock', 'Qty', 'Avg Cost', 'Last Price', 'Value', 'P/L', 'P/L %', 'vs Peak', 'Source'].map(t => ({ t })), true),
-      row([{ t: 'No open positions held. Daily automated scan runs at 16:00 IST.', c: 'mute' }])
+      row([{ t: 'No open positions held. Daily automated scan runs at 14:45 IST (Power Hour).', c: 'mute' }])
     ]);
   } else {
     fill('hold', [

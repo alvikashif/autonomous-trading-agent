@@ -505,6 +505,21 @@ def cmd_ai_scan(args, cfg) -> None:
         raise SystemExit("No compliant stocks found. Run `agent screen` first.")
     compliant_symbols = set(elig["symbol"])
 
+    # Exclude symbols already held in active Demat account
+    held_symbols = set()
+    b_cfg = cfg.broker
+    if b_cfg.resolved_api_key() and b_cfg.resolved_totp_secret():
+        try:
+            from .broker import GrowwBroker
+            broker = GrowwBroker(api_key=b_cfg.resolved_api_key(), totp_secret=b_cfg.resolved_totp_secret(), token_cache_path=b_cfg.token_cache_path)
+            broker.authenticate()
+            held_symbols = set(broker.positions().keys())
+            if held_symbols:
+                print(f"Active Demat holdings excluded from new candidate scan: {', '.join(sorted(held_symbols))}")
+        except Exception:
+            pass
+    compliant_symbols = {s for s in compliant_symbols if s not in held_symbols}
+
     prices_path = cfg.universe.prices_cache_csv
     if not Path(prices_path).is_file():
         raise SystemExit(f"Prices cache not found at {prices_path}. Run `agent backtest` or update cache first.")
@@ -632,6 +647,18 @@ def cmd_ai_trade(args, cfg) -> None:
 
     broker = GrowwBroker(api_key=api_key, totp_secret=totp_secret, token_cache_path=b_cfg.token_cache_path)
     broker.authenticate()
+
+    # Pre-execution position and risk checks
+    current_positions = broker.positions()
+    if symbol in current_positions and current_positions[symbol] > 0:
+        print(f"Skipping trade: {symbol} is already held in Demat account ({current_positions[symbol]} shares).")
+        return
+
+    max_pos = cfg.ai.resolved_max_positions()
+    if len(current_positions) >= max_pos:
+        print(f"Skipping trade: Maximum concurrent positions reached ({len(current_positions)}/{max_pos}).")
+        return
+
     live_cash = broker.cash()
     print(f"Available Groww Balance: Rs {live_cash:,.2f}")
 
@@ -644,14 +671,16 @@ def cmd_ai_trade(args, cfg) -> None:
             f"Insufficient funds or share price too high: 1 share is Rs {entry_px:.2f}, balance is Rs {live_cash:.2f}"
         )
 
-    print(f"Order: BUY {qty} shares of {symbol} (Est: Rs {trade_val:,.2f}, CNC Delivery)")
+    # Compute marketable limit price with 0.3% buffer aligned to NSE tick size (0.05)
+    limit_px = round(round((entry_px * 1.003) / 0.05) * 0.05, 2)
+    print(f"Order: BUY {qty} shares of {symbol} (Limit: Rs {limit_px:.2f}, Est: Rs {trade_val:,.2f}, CNC Delivery)")
 
     if args.dry_run:
         print("DRY RUN: No live order placed.")
         return
 
     if not args.yes:
-        confirm = input(f"Place LIVE REAL-MONEY order for {qty} {symbol} (Rs {trade_val:,.2f}) on Groww? Type 'YES': ")
+        confirm = input(f"Place LIVE REAL-MONEY order for {qty} {symbol} (Limit Rs {limit_px:.2f}, Est Rs {trade_val:,.2f}) on Groww? Type 'YES': ")
         if confirm.strip() != "YES":
             print("Aborted by user.")
             return
@@ -661,8 +690,10 @@ def cmd_ai_trade(args, cfg) -> None:
         side=Side.BUY,
         qty=qty,
         price=entry_px,
+        order_type="LIMIT",
+        slippage_buffer_pct=0.003,
     )
-    print(f"Submitting LIVE CNC Delivery order to Groww: BUY {qty} {symbol}...")
+    print(f"Submitting LIVE LIMIT Delivery order to Groww: BUY {qty} {symbol} @ Limit Rs {limit_px:.2f}...")
     resp = broker.place_order(order)
     print("Groww Response:", resp)
     print("Order execution completed successfully.")

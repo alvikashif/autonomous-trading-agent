@@ -195,7 +195,7 @@ class GrowwBroker(Broker):
         return pos
 
     def place_order(self, order: Order) -> dict:
-        """Place a strictly Shariah-compliant Delivery (CNC) equity order on NSE."""
+        """Place a strictly Shariah-compliant Delivery (CNC) equity order on NSE with limit protection."""
         if order.qty <= 0:
             raise ValueError(f"Invalid order quantity: {order.qty}")
         if order.side not in (Side.BUY, Side.SELL):
@@ -210,15 +210,37 @@ class GrowwBroker(Broker):
         )
 
         client = self._ensure_client()
-        resp = self._execute_with_retry(
-            client.place_order,
-            validity=GrowwAPI.VALIDITY_DAY,
-            exchange=GrowwAPI.EXCHANGE_NSE,
-            segment=GrowwAPI.SEGMENT_CASH,
-            product=GrowwAPI.PRODUCT_CNC,
-            order_type=GrowwAPI.ORDER_TYPE_MARKET,
-            quantity=int(order.qty),
-            trading_symbol=order.symbol.upper(),
-            transaction_type=txn_type,
-        )
+        order_type_str = getattr(order, "order_type", "LIMIT").upper()
+
+        kwargs: dict[str, Any] = {
+            "validity": GrowwAPI.VALIDITY_DAY,
+            "exchange": GrowwAPI.EXCHANGE_NSE,
+            "segment": GrowwAPI.SEGMENT_CASH,
+            "product": GrowwAPI.PRODUCT_CNC,
+            "quantity": int(order.qty),
+            "trading_symbol": order.symbol.upper(),
+            "transaction_type": txn_type,
+        }
+
+        if order_type_str == "LIMIT" and order.price > 0:
+            buffer_pct = getattr(order, "slippage_buffer_pct", 0.003)
+            if order.side == Side.BUY:
+                raw_limit = order.price * (1.0 + buffer_pct)
+            else:
+                raw_limit = order.price * (1.0 - buffer_pct)
+
+            # NSE tick size is 0.05 (round to nearest multiple of 0.05)
+            limit_price = round(round(raw_limit / 0.05) * 0.05, 2)
+            kwargs["order_type"] = GrowwAPI.ORDER_TYPE_LIMIT
+            kwargs["price"] = limit_price
+            logger.info(
+                f"Placing LIVE LIMIT order: {txn_type} {order.qty} {order.symbol} @ Limit Rs {limit_price:.2f} "
+                f"(ref: Rs {order.price:.2f}, buffer: {buffer_pct*100:.1f}%)"
+            )
+        else:
+            kwargs["order_type"] = GrowwAPI.ORDER_TYPE_MARKET
+            kwargs["price"] = 0.0
+            logger.info(f"Placing LIVE MARKET order: {txn_type} {order.qty} {order.symbol}")
+
+        resp = self._execute_with_retry(client.place_order, **kwargs)
         return resp

@@ -16,4 +16,6 @@ class Order:
     symbol: str
     side: Side
     qty: int
-    price: float  # expected fill price
+    price: float  # expected fill price / reference price
+    order_type: str = "LIMIT"  # "LIMIT" or "MARKET"
+    slippage_buffer_pct: float = 0.003  # 0.3% max slippage buffer for marketable limit

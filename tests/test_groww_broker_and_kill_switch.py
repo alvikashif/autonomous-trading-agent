@@ -103,7 +103,7 @@ def test_groww_broker_mocked_calls(tmp_path, monkeypatch):
     pos = broker.positions()
     assert pos == {"INFY": 10, "TCS": 5}
 
-    # Place Buy Order
+    # Place Buy Order (LIMIT with +0.3% buffer rounded to NSE 0.05 tick size)
     order = Order("INFY", Side.BUY, 2, 1800.0)
     resp = broker.place_order(order)
     assert resp["status"] == "SUCCESS"
@@ -112,6 +112,22 @@ def test_groww_broker_mocked_calls(tmp_path, monkeypatch):
     assert placed["quantity"] == 2
     assert placed["product"] == "CNC"
     assert placed["exchange"] == "NSE"
+    assert placed["order_type"] == "LIMIT"
+    assert placed["price"] == 1805.40
+
+    # Place Sell Order (LIMIT with -0.3% buffer)
+    sell_order = Order("INFY", Side.SELL, 2, 1800.0)
+    broker.place_order(sell_order)
+    placed_sell = broker._client.orders_placed[1]
+    assert placed_sell["order_type"] == "LIMIT"
+    assert placed_sell["price"] == 1794.60
+
+    # Place Market Order explicitly
+    mkt_order = Order("INFY", Side.BUY, 1, 0.0, order_type="MARKET")
+    broker.place_order(mkt_order)
+    placed_mkt = broker._client.orders_placed[2]
+    assert placed_mkt["order_type"] == "MARKET"
+    assert placed_mkt["price"] == 0.0
 
 
 def test_groww_broker_auto_reauth_on_401(tmp_path, monkeypatch):

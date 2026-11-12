@@ -25,13 +25,15 @@ case "${AGENT_ROLE:-}" in
     else
       echo '{"ai_auto_trade": false, "broker_mode": "paper"}' > /app/data/active_mode.json
     fi
-    # Daily 16:00 IST, Mon-Fri. paper-run has its own guards (one deposit per
-    # month, rebalance only when due), so repeated runs are safe.
+    # Daily 14:45 IST, Mon-Fri (Power Hour: Live market execution, avoiding overnight AMO risk).
+    # paper-run has its own guards (one deposit per month, rebalance only when due), so repeated runs are safe.
     while true; do
       now=$(date +%s)
-      target=$(date -d "today 16:00" +%s)
-      [ "$now" -ge "$target" ] && target=$(date -d "tomorrow 16:00" +%s)
-      sleep $((target - now))
+      target=$(date -d "today 14:45" +%s)
+      [ "$now" -ge "$target" ] && target=$(date -d "tomorrow 14:45" +%s)
+      diff=$((target - now))
+      echo "[jobs] Next automated scan & trade cycle scheduled in $((diff / 60)) minutes (at 14:45 IST, Power Hour live market)"
+      sleep $diff
       if [ "$(date +%u)" -le 5 ]; then
         if [ "${AI_AUTO_TRADE:-false}" != "true" ]; then
           agent paper-run --deposit || echo "paper-run failed: $?"
