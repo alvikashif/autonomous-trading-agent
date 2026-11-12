@@ -899,8 +899,12 @@ label {
     padding-bottom: 12px;
   }
   .card-header {
-    padding: 4px 6px;
-    margin: -4px -6px 12px -6px;
+    padding: 0;
+    margin: 0 0 12px 0;
+    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   .card.collapsed .card-header {
     margin-bottom: 0;
@@ -910,7 +914,40 @@ label {
     font-size: 11px;
   }
   .card-title {
-    font-size: 13px;
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    letter-spacing: 0.02em;
+  }
+  .card-title svg {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+  }
+  .card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .card-header-actions .pill {
+    font-size: 9.5px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .btn-collapse {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .btn-collapse svg {
+    width: 14px;
+    height: 14px;
   }
   .trade-head {
     flex-direction: column;
@@ -950,6 +987,122 @@ label {
   .btn-resume {
     width: 100%;
     text-align: center;
+  }
+
+  /* Responsive Mobile / Desktop Text Variants */
+  .title-desktop {
+    display: none !important;
+  }
+  .title-mobile {
+    display: inline !important;
+  }
+  .badge-desktop {
+    display: none !important;
+  }
+  .badge-mobile {
+    display: inline !important;
+  }
+
+  /* Market Navigation Tabs on Mobile */
+  .market-nav-bar {
+    padding: 4px !important;
+    gap: 6px !important;
+    margin-bottom: 12px !important;
+    border-radius: 12px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .market-tab-btn {
+    padding: 8px 6px !important;
+    gap: 6px !important;
+    border-radius: 9px !important;
+    min-height: 40px !important;
+    justify-content: center !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .market-flag {
+    font-size: 18px !important;
+    line-height: 1 !important;
+    flex-shrink: 0 !important;
+  }
+  .market-btn-info {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+  }
+  .market-title {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+  .market-sub-text {
+    display: none !important;
+  }
+  .market-badge {
+    font-size: 9px !important;
+    padding: 2px 5px !important;
+    border-radius: 4px !important;
+    letter-spacing: 0.02em !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* US Equities 2-column KPI grid on mobile */
+  .us-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin: 10px 0 !important;
+  }
+  .us-kpi-box {
+    padding: 10px 10px !important;
+    border-radius: 10px !important;
+  }
+  .us-kpi-box .lbl {
+    font-size: 9px !important;
+    margin-bottom: 2px !important;
+  }
+  .us-kpi-box .val {
+    font-size: 15px !important;
+  }
+  .us-kpi-box .sub {
+    font-size: 9px !important;
+    margin-top: 2px !important;
+  }
+
+  /* JNJ anchor card & Shariah ratios */
+  .shariah-audit-card {
+    padding: 10px 12px !important;
+    margin: 10px 0 !important;
+  }
+  .shariah-audit-title {
+    font-size: 12px !important;
+    gap: 6px !important;
+  }
+  .shariah-ratio-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+    font-size: 11px !important;
+  }
+  .ratio-item {
+    font-size: 10.5px !important;
+  }
+
+  /* Step guide on mobile */
+  .step-list {
+    gap: 8px !important;
+  }
+  .step-item {
+    padding: 10px 10px !important;
+    gap: 10px !important;
+  }
+  .step-num {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 11px !important;
+  }
+  .step-text {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
   }
 }
 
@@ -1166,6 +1319,12 @@ label {
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
+
+/* Responsive Desktop / Mobile Text Variants */
+.title-desktop { display: inline; }
+.title-mobile { display: none; }
+.badge-desktop { display: inline; }
+.badge-mobile { display: none; }
 
 /* US Equities View Styling */
 .us-anchor-card {
@@ -1427,6 +1586,11 @@ PAGE = """<!doctype html>
   --shariah: #10b981;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
 body {
   background: var(--bg);
   background-image: radial-gradient(ellipse at 50% -20%, #0f172a 0%, #030712 65%);
@@ -2122,8 +2286,12 @@ footer {
     padding-bottom: 12px;
   }
   .card-header {
-    padding: 4px 6px;
-    margin: -4px -6px 12px -6px;
+    padding: 0;
+    margin: 0 0 12px 0;
+    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   .card.collapsed .card-header {
     margin-bottom: 0;
@@ -2133,7 +2301,40 @@ footer {
     font-size: 11px;
   }
   .card-title {
-    font-size: 13px;
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    letter-spacing: 0.02em;
+  }
+  .card-title svg {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+  }
+  .card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .card-header-actions .pill {
+    font-size: 9.5px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .btn-collapse {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .btn-collapse svg {
+    width: 14px;
+    height: 14px;
   }
   .trade-head {
     flex-direction: column;
@@ -2173,6 +2374,122 @@ footer {
   .btn-resume {
     width: 100%;
     text-align: center;
+  }
+
+  /* Responsive Mobile / Desktop Text Variants */
+  .title-desktop {
+    display: none !important;
+  }
+  .title-mobile {
+    display: inline !important;
+  }
+  .badge-desktop {
+    display: none !important;
+  }
+  .badge-mobile {
+    display: inline !important;
+  }
+
+  /* Market Navigation Tabs on Mobile */
+  .market-nav-bar {
+    padding: 4px !important;
+    gap: 6px !important;
+    margin-bottom: 12px !important;
+    border-radius: 12px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .market-tab-btn {
+    padding: 8px 6px !important;
+    gap: 6px !important;
+    border-radius: 9px !important;
+    min-height: 40px !important;
+    justify-content: center !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .market-flag {
+    font-size: 18px !important;
+    line-height: 1 !important;
+    flex-shrink: 0 !important;
+  }
+  .market-btn-info {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+  }
+  .market-title {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+  .market-sub-text {
+    display: none !important;
+  }
+  .market-badge {
+    font-size: 9px !important;
+    padding: 2px 5px !important;
+    border-radius: 4px !important;
+    letter-spacing: 0.02em !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* US Equities 2-column KPI grid on mobile */
+  .us-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin: 10px 0 !important;
+  }
+  .us-kpi-box {
+    padding: 10px 10px !important;
+    border-radius: 10px !important;
+  }
+  .us-kpi-box .lbl {
+    font-size: 9px !important;
+    margin-bottom: 2px !important;
+  }
+  .us-kpi-box .val {
+    font-size: 15px !important;
+  }
+  .us-kpi-box .sub {
+    font-size: 9px !important;
+    margin-top: 2px !important;
+  }
+
+  /* JNJ anchor card & Shariah ratios */
+  .shariah-audit-card {
+    padding: 10px 12px !important;
+    margin: 10px 0 !important;
+  }
+  .shariah-audit-title {
+    font-size: 12px !important;
+    gap: 6px !important;
+  }
+  .shariah-ratio-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+    font-size: 11px !important;
+  }
+  .ratio-item {
+    font-size: 10.5px !important;
+  }
+
+  /* Step guide on mobile */
+  .step-list {
+    gap: 8px !important;
+  }
+  .step-item {
+    padding: 10px 10px !important;
+    gap: 10px !important;
+  }
+  .step-num {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 11px !important;
+  }
+  .step-text {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
   }
 }
 
@@ -2390,6 +2707,12 @@ footer {
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
+/* Responsive Desktop / Mobile Text Variants */
+.title-desktop { display: inline; }
+.title-mobile { display: none; }
+.badge-desktop { display: inline; }
+.badge-mobile { display: none; }
+
 /* US Equities View Styling */
 .us-anchor-card {
   background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(11, 17, 32, 0.98));
@@ -2596,18 +2919,30 @@ footer {
     <button class="market-tab-btn active" id="btnTabIndia" onclick="switchMarket('india')">
       <span class="market-flag">🇮🇳</span>
       <div class="market-btn-info">
-        <span class="market-title">India Equities (NSE/BSE)</span>
+        <span class="market-title">
+          <span class="title-desktop">India Equities (NSE/BSE)</span>
+          <span class="title-mobile">India (NSE)</span>
+        </span>
         <span class="market-sub-text">Groww CNC Delivery · AI Swing Trade</span>
       </div>
-      <span class="market-badge badge-live">LIVE GROWW</span>
+      <span class="market-badge badge-live">
+        <span class="badge-desktop">LIVE GROWW</span>
+        <span class="badge-mobile">LIVE</span>
+      </span>
     </button>
     <button class="market-tab-btn" id="btnTabUS" onclick="switchMarket('us')">
       <span class="market-flag">🇺🇸</span>
       <div class="market-btn-info">
-        <span class="market-title">US Equities (NYSE/NASDAQ)</span>
+        <span class="market-title">
+          <span class="title-desktop">US Equities (NYSE/NASDAQ)</span>
+          <span class="title-mobile">US Stocks</span>
+        </span>
         <span class="market-sub-text">Conservative Compounding · Low Volatility</span>
       </div>
-      <span class="market-badge badge-us">AAOIFI CERTIFIED</span>
+      <span class="market-badge badge-us">
+        <span class="badge-desktop">AAOIFI CERTIFIED</span>
+        <span class="badge-mobile">AAOIFI</span>
+      </span>
     </button>
   </div>
 
@@ -2618,7 +2953,7 @@ footer {
     <div class="card-header" onclick="toggleCard('kpiCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        <span>Portfolio Performance & Capital Metrics</span>
+        <span><span class="title-desktop">Portfolio Performance &amp; Capital Metrics</span><span class="title-mobile">Portfolio Metrics</span></span>
       </div>
       <div class="card-header-actions">
         <button class="btn-collapse" type="button" aria-label="Toggle section">
@@ -2636,7 +2971,7 @@ footer {
     <div class="card-header" onclick="toggleCard('aicard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93l-.25.04v2.03h2.5a2.5 2.5 0 0 1 2.45 2l.05.25v2.5a2.5 2.5 0 0 1-2 2.45l-.25.05h-6.5a2.5 2.5 0 0 1-2.45-2l-.05-.25v-2.5a2.5 2.5 0 0 1 2-2.45l.25-.05h2.5v-2.03l-.25-.04A4 4 0 0 1 12 2z"/></svg>
-        <span>AI Quantitative Analyst</span>
+        <span><span class="title-desktop">AI Quantitative Analyst</span><span class="title-mobile">AI Analyst</span></span>
       </div>
       <div class="card-header-actions">
         <span id="aimodel" class="pill" style="background:#0f172a;color:#38bdf8;border-color:#1e3a5f"></span>
@@ -2657,7 +2992,7 @@ footer {
     <div class="card-header" onclick="toggleCard('holdCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span>Active Portfolio Holdings</span>
+        <span><span class="title-desktop">Active Portfolio Holdings</span><span class="title-mobile">Active Holdings</span></span>
       </div>
       <div class="card-header-actions">
         <div id="holdCount" class="pill" style="background:#0f172a;color:var(--mute)">0 Assets</div>
@@ -2678,7 +3013,7 @@ footer {
     <div class="card-header" onclick="toggleCard('swingcard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-        <span>Swing Sandbox (Paper Breakouts)</span>
+        <span><span class="title-desktop">Swing Sandbox (Paper Breakouts)</span><span class="title-mobile">Swing Sandbox</span></span>
       </div>
       <div class="card-header-actions">
         <div id="swrule" class="pill" style="background:#0f172a;color:#38bdf8">Breakout Rule</div>
@@ -2704,7 +3039,7 @@ footer {
     <div class="card-header" onclick="toggleCard('monCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        <span>Execution Engine & Real-Time Monitor</span>
+        <span><span class="title-desktop">Execution Engine &amp; Real-Time Monitor</span><span class="title-mobile">Execution Engine</span></span>
       </div>
       <div class="card-header-actions">
         <button class="btn-collapse" type="button" aria-label="Toggle section">
@@ -2723,7 +3058,7 @@ footer {
     <div class="card-header" onclick="toggleCard('tradesCard')">
       <div class="card-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
-        <span>Recent Executed Orders</span>
+        <span><span class="title-desktop">Recent Executed Orders</span><span class="title-mobile">Recent Orders</span></span>
       </div>
       <div class="card-header-actions">
         <div id="tradesBadge" class="pill" style="display:none"></div>
@@ -2747,10 +3082,10 @@ footer {
       <div class="card-header" onclick="toggleCard('usStrategyCard')">
         <div class="card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>US Equities: Conservative Long-Term Compounding</span>
+          <span><span class="title-desktop">US Equities: Conservative Long-Term Compounding</span><span class="title-mobile">US Conservative Strategy</span></span>
         </div>
         <div class="card-header-actions">
-          <span class="pill badge-us">AAOIFI CERTIFIED</span>
+          <span class="pill badge-us"><span class="badge-desktop">AAOIFI CERTIFIED</span><span class="badge-mobile">AAOIFI</span></span>
           <button class="btn-collapse" type="button" aria-label="Toggle section">
             <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -2790,10 +3125,10 @@ footer {
       <div class="card-header" onclick="toggleCard('usTopPickCard')">
         <div class="card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          <span>Top Conservative US Anchor: Johnson &amp; Johnson (NYSE: JNJ)</span>
+          <span><span class="title-desktop">Top Conservative US Anchor: Johnson &amp; Johnson (NYSE: JNJ)</span><span class="title-mobile">Top Pick: JNJ (NYSE)</span></span>
         </div>
         <div class="card-header-actions">
-          <span class="pill" style="background:#0c1322;color:#38bdf8;border-color:#1e293b">Conviction Score: <strong>9.5 / 10</strong></span>
+          <span class="pill" style="background:#0c1322;color:#38bdf8;border-color:#1e293b"><span class="badge-desktop">Conviction Score: <strong>9.5 / 10</strong></span><span class="badge-mobile">Score: <strong>9.5</strong></span></span>
           <button class="btn-collapse" type="button" aria-label="Toggle section">
             <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -2801,7 +3136,7 @@ footer {
       </div>
       <div class="card-body">
         <div class="trade-head">
-          <div class="trade-symbol">JNJ <span class="trade-badge" style="background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3)">CORE CONSERVATIVE ANCHOR</span></div>
+          <div class="trade-symbol">JNJ <span class="trade-badge" style="background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3)"><span class="badge-desktop">CORE CONSERVATIVE ANCHOR</span><span class="badge-mobile">ANCHOR</span></span></div>
           <div class="pill" style="background:#064e3b;color:#34d399;border-color:#059669">AAOIFI COMPLIANT</div>
         </div>
         <div class="trade-metrics" style="grid-template-columns:repeat(auto-fit, minmax(140px, 1fr))">
@@ -2841,10 +3176,10 @@ footer {
       <div class="card-header" onclick="toggleCard('usCandidatesCard')">
         <div class="card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          <span>US Equities: Candidate Screening &amp; Volatility Analysis</span>
+          <span><span class="title-desktop">US Equities: Candidate Screening &amp; Volatility Analysis</span><span class="title-mobile">US Stocks Screening</span></span>
         </div>
         <div class="card-header-actions">
-          <span class="pill" style="background:#0f172a;color:var(--mute)">6 Evaluated</span>
+          <span class="pill" style="background:#0f172a;color:var(--mute)"><span class="badge-desktop">6 Evaluated</span><span class="badge-mobile">6 Assets</span></span>
           <button class="btn-collapse" type="button" aria-label="Toggle section">
             <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -2876,10 +3211,10 @@ footer {
       <div class="card-header" onclick="toggleCard('usExecutionCard')">
         <div class="card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
-          <span>How to Execute on Groww US Stocks</span>
+          <span><span class="title-desktop">How to Execute on Groww US Stocks</span><span class="title-mobile">Groww US Guide</span></span>
         </div>
         <div class="card-header-actions">
-          <span class="pill" style="background:#0f172a;color:#38bdf8">GIFT City / Alpaca</span>
+          <span class="pill" style="background:#0f172a;color:#38bdf8"><span class="badge-desktop">GIFT City / Alpaca</span><span class="badge-mobile">GIFT City</span></span>
           <button class="btn-collapse" type="button" aria-label="Toggle section">
             <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
