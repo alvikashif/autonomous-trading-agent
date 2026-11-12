@@ -65,6 +65,151 @@ def _get_recent_notifications(path: str = "data/notifications.json") -> list[dic
         return []
 
 
+def _get_us_stocks_summary() -> dict:
+    """Evaluate US Equities for long-term conservative compounding with low market volatility."""
+    return {
+        "status": "ACTIVE_EVALUATION",
+        "strategy": "Long-Term Conservative Compounding",
+        "mandate": "Zero Speculation · Low Volatility (Beta < 0.6) · AAOIFI Shariah Compliant",
+        "account_type": "Groww US Stocks (GIFT City IFSC / Alpaca LRS)",
+        "top_pick": {
+            "symbol": "JNJ",
+            "name": "Johnson & Johnson",
+            "exchange": "NYSE",
+            "price_usd": 284.08,
+            "target_usd": 330.00,
+            "target_pct": 0.162,
+            "forward_pe": 24.4,
+            "beta": 0.20,
+            "dividend_yield_pct": 1.91,
+            "dividend_king_years": 62,
+            "credit_rating": "AAA",
+            "debt_to_mcap_pct": 6.5,
+            "cash_usd": "$17.2B",
+            "market_cap_usd": "$683.8B",
+            "conviction_score": 9.5,
+            "verdict": "TOP CONSERVATIVE ANCHOR",
+            "shariah": {
+                "status": "100% AAOIFI Compliant",
+                "debt_to_mcap": "6.5% (Limit < 30%)",
+                "cash_to_mcap": "2.5% (Limit < 30%)",
+                "impure_income": "0.4% (Limit < 5%)",
+            },
+            "thesis": (
+                "Pristine AAA balance sheet (higher credit than US Government). 62-year Dividend King "
+                "with an ultra-low 0.20 Beta (80% less volatile than market swings). Essential healthcare moat "
+                "(Innovative Medicines & MedTech surgical devices) with completely recession-resilient cash flows."
+            ),
+            "allocation_guidance": "Recommended Core Allocation: 60% – 70% in JNJ, 30% in Abbott (ABT) or SPUS ETF.",
+        },
+        "candidates": [
+            {
+                "symbol": "JNJ",
+                "name": "Johnson & Johnson",
+                "exchange": "NYSE",
+                "sector": "Healthcare / MedTech",
+                "price_usd": 284.08,
+                "beta": 0.20,
+                "forward_pe": 24.4,
+                "div_yield": "1.91%",
+                "div_years": "62y King",
+                "debt_mcap": "6.5%",
+                "rating": "AAA",
+                "shariah": "PASS",
+                "verdict": "SELECTED (Top Core Anchor)",
+                "note": "Ultra-low 0.20 Beta provides unmatched stability against market crashes.",
+            },
+            {
+                "symbol": "ABT",
+                "name": "Abbott Laboratories",
+                "exchange": "NYSE",
+                "sector": "Medical Devices & Diagnostics",
+                "price_usd": 110.00,
+                "beta": 0.54,
+                "forward_pe": 18.5,
+                "div_yield": "2.31%",
+                "div_years": "52y King",
+                "debt_mcap": "16.5%",
+                "rating": "AA",
+                "shariah": "PASS",
+                "verdict": "SELECTED (Defensive Growth)",
+                "note": "Priced at attractive 18.5x PE with strong diagnostic and continuous glucose monitoring moat.",
+            },
+            {
+                "symbol": "PG",
+                "name": "Procter & Gamble",
+                "exchange": "NYSE",
+                "sector": "Consumer Essentials",
+                "price_usd": 169.58,
+                "beta": 0.36,
+                "forward_pe": 22.9,
+                "div_yield": "2.60%",
+                "div_years": "68y King",
+                "debt_mcap": "9.9%",
+                "rating": "AA-",
+                "shariah": "PASS",
+                "verdict": "WATCHLIST (Solid Defensive)",
+                "note": "Everyday consumer products (Tide, Gillette, Oral-B); lower organic growth than healthcare.",
+            },
+            {
+                "symbol": "SPUS",
+                "name": "SP Funds S&P 500 Sharia ETF",
+                "exchange": "NYSE Arca",
+                "sector": "Broad Market ETF",
+                "price_usd": 57.03,
+                "beta": 0.90,
+                "forward_pe": 28.3,
+                "div_yield": "0.90%",
+                "div_years": "ETF Basket",
+                "debt_mcap": "Diversified",
+                "rating": "Basket",
+                "shariah": "100% SHARIAH ETF",
+                "verdict": "ALTERNATIVE (Diversification)",
+                "note": "Holds ~100 compliant US large caps. Zero single-stock risk, but has higher market beta.",
+            },
+            {
+                "symbol": "MSFT",
+                "name": "Microsoft Corporation",
+                "exchange": "NASDAQ",
+                "sector": "Cloud & Enterprise Software",
+                "price_usd": 520.80,
+                "beta": 1.05,
+                "forward_pe": 21.5,
+                "div_yield": "0.75%",
+                "div_years": "22y",
+                "debt_mcap": "3.5%",
+                "rating": "AAA",
+                "shariah": "PASS",
+                "verdict": "EXCLUDED (High Volatility)",
+                "note": "Beta > 1.0; tech multiples fluctuate significantly during interest rate cycles.",
+            },
+            {
+                "symbol": "GOOGL",
+                "name": "Alphabet Inc.",
+                "exchange": "NASDAQ",
+                "sector": "Search & Cloud Infrastructure",
+                "price_usd": 295.37,
+                "beta": 1.23,
+                "forward_pe": 19.2,
+                "div_yield": "0.45%",
+                "div_years": "1y",
+                "debt_mcap": "0.6%",
+                "rating": "AA+",
+                "shariah": "PASS",
+                "verdict": "EXCLUDED (High Volatility)",
+                "note": "Beta of 1.23 experiences 23% greater swings than broad market; violates low-volatility mandate.",
+            },
+        ],
+        "groww_execution_steps": [
+            "Open Groww App / Web and navigate to the 'US Stocks' tab.",
+            "Verify USD wallet balance (funded via RBI LRS inward remittance from your bank).",
+            "Search ticker 'JNJ' (Johnson & Johnson) or 'ABT' (Abbott Laboratories).",
+            "Choose whole shares or fractional dollar investment (Groww supports starting from as low as $1).",
+            "Select 'BUY DELIVERY (CNC)' — long-term holding with quarterly USD dividend reinvestment.",
+        ],
+    }
+
+
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
                   rebalance_months: int, swing_path: str | None = None,
                   kill_switch_path: str | None = None, broker_mode: str = "paper",
@@ -171,6 +316,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "swing": (_read_json(swing_path) if swing_path else {}) if not is_live else {},
         "kill_switch": get_kill_switch_status(kill_switch_path or "data/kill_switch.json"),
         "ai_signals": _read_json(ai_signals_path) if ai_signals_path else {},
+        "us_stocks": _get_us_stocks_summary(),
         "api_budget": api_budget,
         "notifications": _get_recent_notifications(),
     }
@@ -942,6 +1088,181 @@ label {
   background: rgba(16, 185, 129, 0.12);
   color: #34d399;
   border-color: rgba(16, 185, 129, 0.35);
+}
+
+/* Market Navigation Tabs (India vs US) */
+.market-nav-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  background: rgba(11, 17, 32, 0.85);
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid #1e293b;
+  backdrop-filter: blur(10px);
+}
+.market-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--mute);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+.market-tab-btn:hover {
+  background: rgba(30, 41, 59, 0.4);
+  color: var(--ink);
+}
+.market-tab-btn.active {
+  background: #0f172a;
+  border-color: #38bdf8;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.15);
+}
+.market-flag {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.market-btn-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.market-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.market-sub-text {
+  font-size: 11px;
+  color: var(--mute);
+}
+.market-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.badge-live {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.badge-us {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+/* US Equities View Styling */
+.us-anchor-card {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(11, 17, 32, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.1);
+}
+.us-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.us-kpi-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.us-kpi-box .lbl {
+  font-size: 11px;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.us-kpi-box .val {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+.us-kpi-box .sub {
+  font-size: 11px;
+  color: var(--subtle);
+  margin-top: 2px;
+}
+.shariah-audit-card {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+.shariah-audit-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #34d399;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.shariah-ratio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+}
+.ratio-item {
+  color: #cbd5e1;
+}
+.ratio-item strong {
+  color: #fff;
+}
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.step-num {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-text {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.45;
 }
 
 </style>
@@ -1992,6 +2313,181 @@ footer {
   border-color: rgba(16, 185, 129, 0.35);
 }
 
+/* Market Navigation Tabs (India vs US) */
+.market-nav-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  background: rgba(11, 17, 32, 0.85);
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid #1e293b;
+  backdrop-filter: blur(10px);
+}
+.market-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--mute);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+.market-tab-btn:hover {
+  background: rgba(30, 41, 59, 0.4);
+  color: var(--ink);
+}
+.market-tab-btn.active {
+  background: #0f172a;
+  border-color: #38bdf8;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.15);
+}
+.market-flag {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.market-btn-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.market-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.market-sub-text {
+  font-size: 11px;
+  color: var(--mute);
+}
+.market-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.badge-live {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.badge-us {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+/* US Equities View Styling */
+.us-anchor-card {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(11, 17, 32, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.1);
+}
+.us-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.us-kpi-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.us-kpi-box .lbl {
+  font-size: 11px;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.us-kpi-box .val {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+.us-kpi-box .sub {
+  font-size: 11px;
+  color: var(--subtle);
+  margin-top: 2px;
+}
+.shariah-audit-card {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+.shariah-audit-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #34d399;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.shariah-ratio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+}
+.ratio-item {
+  color: #cbd5e1;
+}
+.ratio-item strong {
+  color: #fff;
+}
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.step-num {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-text {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
 </style>
 </head>
 <body>
@@ -2095,6 +2591,28 @@ footer {
     </div>
   </div>
 
+  <!-- Market Navigation Tabs (India vs US) -->
+  <div class="market-nav-bar">
+    <button class="market-tab-btn active" id="btnTabIndia" onclick="switchMarket('india')">
+      <span class="market-flag">🇮🇳</span>
+      <div class="market-btn-info">
+        <span class="market-title">India Equities (NSE/BSE)</span>
+        <span class="market-sub-text">Groww CNC Delivery · AI Swing Trade</span>
+      </div>
+      <span class="market-badge badge-live">LIVE GROWW</span>
+    </button>
+    <button class="market-tab-btn" id="btnTabUS" onclick="switchMarket('us')">
+      <span class="market-flag">🇺🇸</span>
+      <div class="market-btn-info">
+        <span class="market-title">US Equities (NYSE/NASDAQ)</span>
+        <span class="market-sub-text">Conservative Compounding · Low Volatility</span>
+      </div>
+      <span class="market-badge badge-us">AAOIFI CERTIFIED</span>
+    </button>
+  </div>
+
+  <!-- INDIA EQUITIES VIEW -->
+  <div id="viewIndia">
   <!-- Portfolio Performance & Capital Metrics -->
   <div class="card" id="kpiCard">
     <div class="card-header" onclick="toggleCard('kpiCard')">
@@ -2220,6 +2738,178 @@ footer {
       </div>
     </div>
   </div>
+  </div> <!-- /viewIndia -->
+
+  <!-- US EQUITIES VIEW -->
+  <div id="viewUS" style="display:none">
+    <!-- US Strategy & Capital Allocation -->
+    <div class="card" id="usStrategyCard">
+      <div class="card-header" onclick="toggleCard('usStrategyCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>US Equities: Conservative Long-Term Compounding</span>
+        </div>
+        <div class="card-header-actions">
+          <span class="pill badge-us">AAOIFI CERTIFIED</span>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:13px;color:#cbd5e1;line-height:1.6;margin-bottom:14px">
+          <strong>Conservative Low-Volatility Mandate:</strong> Designed to protect and steadily compound capital in USD by eliminating market drawdowns and speculative tech swings. Stocks must pass strict AAOIFI Shariah audits, have an ultra-low market Beta (&lt; 0.60), and possess fortress AAA/AA balance sheets.
+        </div>
+        <div class="us-kpi-grid">
+          <div class="us-kpi-box">
+            <div class="lbl">Investment Horizon</div>
+            <div class="val" style="color:#38bdf8">3 – 5+ Years</div>
+            <div class="sub">Long-term compounder</div>
+          </div>
+          <div class="us-kpi-box">
+            <div class="lbl">Volatility Filter</div>
+            <div class="val" style="color:#34d399">Beta &lt; 0.60</div>
+            <div class="sub">60%+ less swing than S&P 500</div>
+          </div>
+          <div class="us-kpi-box">
+            <div class="lbl">Balance Sheet Safety</div>
+            <div class="val" style="color:#f59e0b">AAA / AA Rating</div>
+            <div class="sub">Debt / Market Cap &lt; 15%</div>
+          </div>
+          <div class="us-kpi-box">
+            <div class="lbl">Broker &amp; Route</div>
+            <div class="val" style="color:#cbd5e1">Groww US Stocks</div>
+            <div class="sub">GIFT City IFSC / Alpaca LRS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Recommended Anchor Card: Johnson & Johnson -->
+    <div class="card us-anchor-card" id="usTopPickCard">
+      <div class="card-header" onclick="toggleCard('usTopPickCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>Top Conservative US Anchor: Johnson &amp; Johnson (NYSE: JNJ)</span>
+        </div>
+        <div class="card-header-actions">
+          <span class="pill" style="background:#0c1322;color:#38bdf8;border-color:#1e293b">Conviction Score: <strong>9.5 / 10</strong></span>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="trade-head">
+          <div class="trade-symbol">JNJ <span class="trade-badge" style="background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3)">CORE CONSERVATIVE ANCHOR</span></div>
+          <div class="pill" style="background:#064e3b;color:#34d399;border-color:#059669">AAOIFI COMPLIANT</div>
+        </div>
+        <div class="trade-metrics" style="grid-template-columns:repeat(auto-fit, minmax(140px, 1fr))">
+          <div class="metric-box"><div class="lbl">Last Price</div><div class="val" id="usJnjPrice">$284.08</div></div>
+          <div class="metric-box"><div class="lbl">Fair Value Target</div><div class="val up">$330.00 (+16%)</div></div>
+          <div class="metric-box"><div class="lbl">Beta (Volatility)</div><div class="val" style="color:#34d399">0.20 (Ultra-Low)</div></div>
+          <div class="metric-box"><div class="lbl">Forward P/E</div><div class="val">24.4x</div></div>
+          <div class="metric-box"><div class="lbl">Dividend History</div><div class="val up">62y King (1.9%)</div></div>
+          <div class="metric-box"><div class="lbl">Credit Rating</div><div class="val" style="color:#f59e0b">AAA (Fortress)</div></div>
+        </div>
+
+        <div class="shariah-audit-card">
+          <div class="shariah-audit-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span>AAOIFI Shariah Compliance Audit (Pristine Pass)</span>
+          </div>
+          <div class="shariah-ratio-grid">
+            <div class="ratio-item">Total Debt / Mcap: <strong>6.5%</strong> (Safe Limit: &lt; 30%)</div>
+            <div class="ratio-item">Cash &amp; Equivalents: <strong>$17.2B</strong> (2.5% of Mcap)</div>
+            <div class="ratio-item">Impure Income: <strong>0.4%</strong> (Safe Limit: &lt; 5%)</div>
+            <div class="ratio-item">Core Business: <strong>100% Halal Healthcare &amp; MedTech</strong></div>
+          </div>
+        </div>
+
+        <div class="thesis-text" style="margin-top:10px">
+          <strong>Why JNJ is the Ultimate Low-Volatility Choice:</strong> Johnson &amp; Johnson operates in non-cyclical life-saving pharmaceuticals (oncology, immunology) and surgical MedTech robotics. Demand for essential therapies and surgical equipment does not drop during economic downturns. With an ultra-low Beta of 0.20 (moves 80% less than the general market) and a pristine AAA credit rating (higher than the US Federal Government), JNJ protects your capital from market swings while generating steady quarterly USD cash flows.
+        </div>
+
+        <div class="pill" style="width:100%;margin-top:10px;background:rgba(56,189,248,0.12);color:#38bdf8;border-color:rgba(56,189,248,0.25)">
+          💡 Allocation Blueprint: Allocate 60% – 70% in JNJ as your primary anchor, with 30% in Abbott Laboratories (ABT) or SPUS ETF for diversified balance.
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparative Candidates Table -->
+    <div class="card" id="usCandidatesCard">
+      <div class="card-header" onclick="toggleCard('usCandidatesCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <span>US Equities: Candidate Screening &amp; Volatility Analysis</span>
+        </div>
+        <div class="card-header-actions">
+          <span class="pill" style="background:#0f172a;color:var(--mute)">6 Evaluated</span>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="usCandidatesTable">
+            <thead>
+              <tr>
+                <th>Ticker &amp; Asset</th>
+                <th>Sector &amp; Moat</th>
+                <th>Beta (Volatility)</th>
+                <th>Forward P/E</th>
+                <th>Dividend Record</th>
+                <th>Debt / Mcap</th>
+                <th>Shariah Audit</th>
+                <th>Agent Verdict</th>
+              </tr>
+            </thead>
+            <tbody id="usCandidatesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Groww US Stocks Step-by-Step Execution Guide -->
+    <div class="card" id="usExecutionCard">
+      <div class="card-header" onclick="toggleCard('usExecutionCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          <span>How to Execute on Groww US Stocks</span>
+        </div>
+        <div class="card-header-actions">
+          <span class="pill" style="background:#0f172a;color:#38bdf8">GIFT City / Alpaca</span>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-bottom:12px">
+          Groww US Stocks is powered by Groww IFSC in GIFT City partnering with US broker Alpaca Securities. Follow these simple steps in your Groww app:
+        </div>
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-text">Open the <strong>Groww App</strong> &rarr; Tap <strong>Stocks</strong> &rarr; Select the <strong>US Stocks</strong> tab.</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-text">Ensure your USD wallet is funded via <strong>RBI LRS inward remittance</strong> from your linked Indian bank account (HDFC, ICICI, Axis, Kotak, etc.).</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-text">Search for <strong>JNJ</strong> (Johnson &amp; Johnson) or <strong>ABT</strong> (Abbott Laboratories). Groww supports fractional investing, so you can enter any dollar amount (starting from as low as $1) or full shares.</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">4</div>
+            <div class="step-text">Select <strong>Delivery (CNC)</strong> and execute. Hold for 3–5+ years, allowing quarterly USD dividends to compound automatically without market volatility.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div> <!-- /viewUS -->
 
   <footer>
     Autonomous Execution Terminal · Delivery CNC Only · Non-Leveraged · Protected by Tailscale Mesh
@@ -2635,6 +3325,7 @@ async function load() {
       ]))
     ]);
   }
+  renderUSStocks(d.us_stocks);
   updateToggleAllBtn();
 }
 
@@ -2971,7 +3662,59 @@ if (isIosDevice && !isStandalone && iosHint && !sessionStorage.getItem('ios_hint
   iosHint.style.display = 'flex';
 }
 
-const ALL_CARD_IDS = ['kpiCard', 'aicard', 'holdCard', 'swingcard', 'monCard', 'tradesCard'];
+const ALL_CARD_IDS = [
+  'kpiCard', 'aicard', 'holdCard', 'swingcard', 'monCard', 'tradesCard',
+  'usStrategyCard', 'usTopPickCard', 'usCandidatesCard', 'usExecutionCard'
+];
+
+function switchMarket(m) {
+  const isIndia = (m === 'india');
+  const viewIndia = document.getElementById('viewIndia');
+  const viewUS = document.getElementById('viewUS');
+  const btnIndia = document.getElementById('btnTabIndia');
+  const btnUS = document.getElementById('btnTabUS');
+  if (viewIndia) viewIndia.style.display = isIndia ? 'block' : 'none';
+  if (viewUS) viewUS.style.display = isIndia ? 'none' : 'block';
+  if (btnIndia) btnIndia.classList.toggle('active', isIndia);
+  if (btnUS) btnUS.classList.toggle('active', !isIndia);
+  try { localStorage.setItem('alvi_active_market', m); } catch(e){}
+  updateToggleAllBtn();
+}
+
+function renderUSStocks(us) {
+  if (!us) return;
+  const top = us.top_pick;
+  if (top) {
+    const pxEl = document.getElementById('usJnjPrice');
+    if (pxEl && top.price_usd) pxEl.textContent = '$' + Number(top.price_usd).toFixed(2);
+  }
+
+  const tbody = document.getElementById('usCandidatesTbody');
+  if (tbody && us.candidates && us.candidates.length) {
+    tbody.replaceChildren();
+    us.candidates.forEach(c => {
+      const tr = document.createElement('tr');
+      const isTop = (c.symbol === 'JNJ');
+      const isRunner = (c.symbol === 'ABT');
+      const isExclude = (c.verdict || '').includes('EXCLUDED');
+      
+      const vClass = isTop ? 'up bold' : (isRunner ? 'up' : (isExclude ? 'down' : 'mute'));
+      const betaColor = c.beta < 0.6 ? '#34d399' : (c.beta < 1.0 ? '#38bdf8' : '#f87171');
+
+      tr.innerHTML = `
+        <td><strong>${c.symbol}</strong> <span style="font-size:11px;color:var(--mute)">(${c.exchange})</span><div style="font-size:11px;color:#94a3b8">${c.name}</div></td>
+        <td style="font-size:12px;color:#cbd5e1">${c.sector}</td>
+        <td style="font-family:'JetBrains Mono';font-weight:700;color:${betaColor}">${c.beta != null ? c.beta.toFixed(2) : '–'} <span style="font-size:10px;font-weight:400;color:var(--mute)">${c.beta < 0.6 ? '(Low Vol)' : '(Market)'}</span></td>
+        <td style="font-family:'JetBrains Mono'">${c.forward_pe ? c.forward_pe.toFixed(1) + 'x' : '–'}</td>
+        <td style="font-size:12px">${c.div_years} <span style="color:var(--mute)">(${c.div_yield})</span></td>
+        <td style="font-family:'JetBrains Mono'">${c.debt_mcap}</td>
+        <td><span class="pill" style="font-size:10px;padding:2px 6px;background:${c.shariah === 'PASS' || c.shariah.includes('SHARIAH') ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)'};color:${c.shariah === 'PASS' || c.shariah.includes('SHARIAH') ? '#34d399' : '#f87171'}">${c.shariah}</span></td>
+        <td class="${vClass}" style="font-size:12px">${c.verdict}<div style="font-size:10px;color:var(--mute);margin-top:2px">${c.note || ''}</div></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
 
 function toggleCard(cardId, e) {
   if (e) e.stopPropagation();
@@ -3026,6 +3769,8 @@ function restoreCardCollapseState() {
 }
 
 restoreCardCollapseState();
+const savedMarket = localStorage.getItem('alvi_active_market') || 'india';
+switchMarket(savedMarket);
 load();
 setInterval(load, 15000);
 </script>
