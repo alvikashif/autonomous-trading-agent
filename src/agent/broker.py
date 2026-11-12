@@ -298,7 +298,7 @@ class GrowwBroker(Broker):
             quantity=int(qty),
             product_type=GrowwAPI.PRODUCT_CNC,
             exchange=GrowwAPI.EXCHANGE_NSE,
-            duration=GrowwAPI.VALIDITY_GTC,
+            duration=GrowwAPI.VALIDITY_DAY,
             trigger_price=str(trig_px),
             trigger_direction=GrowwAPI.TRIGGER_DIRECTION_DOWN,
             order=order_details,
@@ -334,7 +334,7 @@ class GrowwBroker(Broker):
             status=status,
         )
         if isinstance(resp, dict):
-            for k in ("smart_orders", "payload", "data"):
+            for k in ("orders", "smart_orders", "payload", "data"):
                 val = resp.get(k)
                 if isinstance(val, list):
                     return val

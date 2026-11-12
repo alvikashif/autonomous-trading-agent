@@ -142,7 +142,7 @@ def test_groww_broker_mocked_calls(tmp_path, monkeypatch):
     assert placed_mkt["order_type"] == "MARKET"
     assert placed_mkt["price"] == 0.0
 
-    # Test Groww GTT Stop Loss Creation
+    # Test Groww GTT Stop Loss Creation (duration must be DAY for Groww advance orders)
     gtt_resp = broker.create_gtt_stop_loss("INFY", 2, trigger_price=1674.0)
     assert gtt_resp["smart_order_id"] == "GTT999"
     gtt_placed = broker._client.smart_orders_created[0]
@@ -151,11 +151,18 @@ def test_groww_broker_mocked_calls(tmp_path, monkeypatch):
     assert gtt_placed["trigger_price"] == "1674.0"
     assert gtt_placed["smart_order_type"] == "GTT"
     assert gtt_placed["trigger_direction"] == "DOWN"
+    assert gtt_placed["duration"] == "DAY"
 
-    # Test Groww GTT Order List & Cancel
+    # Test Groww GTT Order List & Cancel (both 'smart_orders' and 'orders' keys)
     active_gtts = broker.get_gtt_orders()
     assert len(active_gtts) == 1
     assert active_gtts[0]["smart_order_id"] == "GTT999"
+
+    # Also test 'orders' key format returned by live Groww API
+    broker._client.get_smart_order_list = lambda **kwargs: {"orders": [{"smart_order_id": "GTT888", "status": "ACTIVE"}]}
+    active_gtts_orders = broker.get_gtt_orders()
+    assert len(active_gtts_orders) == 1
+    assert active_gtts_orders[0]["smart_order_id"] == "GTT888"
 
     cancel_resp = broker.cancel_gtt_order("GTT999")
     assert cancel_resp["status"] == "SUCCESS"
