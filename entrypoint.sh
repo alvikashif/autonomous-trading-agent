@@ -25,6 +25,26 @@ case "${AGENT_ROLE:-}" in
     else
       echo '{"ai_auto_trade": false, "broker_mode": "paper"}' > /app/data/active_mode.json
     fi
+
+    # Function for automated continuous Gemini Paper Trading (1 Lac Capital)
+    run_gemini_paper_cycle() {
+      if [ -n "${GEMINI_API_KEY:-}" ]; then
+        echo "[paper-jobs] Running continuous Gemini AI paper trade cycle (1 Lac sandbox)..."
+        agent ai-scan --paper --provider gemini || echo "[paper-jobs] paper ai-scan failed: $?"
+        agent ai-trade --paper || echo "[paper-jobs] paper ai-trade failed: $?"
+      fi
+    }
+
+    # Background loop: keep doing paper trades continuously (startup run + every 2 hours)
+    (
+      sleep 10
+      run_gemini_paper_cycle
+      while true; do
+        sleep 7200
+        run_gemini_paper_cycle
+      done
+    ) &
+
     # Daily 14:45 IST, Mon-Fri (Power Hour: Live market execution, avoiding overnight AMO risk).
     # paper-run has its own guards (one deposit per month, rebalance only when due), so repeated runs are safe.
     while true; do
@@ -45,6 +65,8 @@ case "${AGENT_ROLE:-}" in
             agent ai-trade --live --yes || echo "ai-trade failed: $?"
           fi
         fi
+        # Continuous Gemini paper execution
+        run_gemini_paper_cycle
       fi
     done
     ;;

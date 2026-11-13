@@ -232,24 +232,35 @@ def _get_paper_sandbox_summary(prices_cache: str, monitor_quotes: dict, swing_pa
         paper_file = Path("data/paper_state.json")
     state = _read_json(paper_file)
 
-    # Filter for paper positions (exclude live real holding SHYAMMETL)
-    raw_positions = state.get("positions", {})
-    paper_positions = {k: int(v) for k, v in raw_positions.items() if int(v) > 0 and k != "SHYAMMETL"}
-    if not paper_positions:
-        paper_positions = {"ADANIPOWER": 4, "COALINDIA": 2, "HINDZINC": 1, "WIPRO": 4}
+    # 1 Lakh INR capital baseline for paper trading sandbox
+    deposits = state.get("deposits", [])
+    deposited = sum(float(d.get("amount", 0.0)) for d in deposits if d.get("amount"))
+    if deposited <= 0.0:
+        deposited = 100000.0
 
     raw_trades = state.get("trades", [])
     paper_trades = [t for t in raw_trades if t.get("symbol") != "SHYAMMETL"]
-    if not paper_trades:
+
+    cash = float(state.get("cash", 100000.0 if not paper_trades else 0.0))
+    total_costs = float(state.get("total_costs", 0.0))
+
+    # Filter for paper positions (exclude live real holding SHYAMMETL)
+    raw_positions = state.get("positions", {})
+    paper_positions = {k: int(v) for k, v in raw_positions.items() if int(v) > 0 and k != "SHYAMMETL"}
+    if not paper_positions and not paper_trades:
+        paper_positions = {"ADANIPOWER": 4, "COALINDIA": 2, "HINDZINC": 1, "WIPRO": 4}
         paper_trades = [
             {"ts": "2026-11-09 10:00:00", "symbol": "ADANIPOWER", "side": "BUY", "qty": 4, "fill_price": 206.21, "cost": 6.88},
             {"ts": "2026-11-09 10:00:00", "symbol": "COALINDIA", "side": "BUY", "qty": 2, "fill_price": 401.90, "cost": 6.85},
             {"ts": "2026-11-09 10:00:00", "symbol": "HINDZINC", "side": "BUY", "qty": 1, "fill_price": 576.53, "cost": 6.58},
             {"ts": "2026-11-09 10:00:00", "symbol": "WIPRO", "side": "BUY", "qty": 4, "fill_price": 199.20, "cost": 6.85},
         ]
+        demo_cost = 4 * 206.21 + 2 * 401.90 + 1 * 576.53 + 4 * 199.20
+        total_costs = 27.16
+        cash = 100000.0 - demo_cost - total_costs
 
-    avg = average_costs(paper_trades)
-    fallback = _last_closes(prices_cache, list(paper_positions))
+    avg = average_costs(paper_trades) if paper_trades else {}
+    fallback = _last_closes(prices_cache, list(paper_positions)) if paper_positions else {}
     holdings = []
     for sym, qty in sorted(paper_positions.items()):
         last = monitor_quotes.get(sym, fallback.get(sym, avg.get(sym, 0.0)))
@@ -263,8 +274,6 @@ def _get_paper_sandbox_summary(prices_cache: str, monitor_quotes: dict, swing_pa
         })
 
     held_value = sum(h["value"] or 0.0 for h in holdings)
-    deposited = 5000.0
-    cash = 1071.66
     equity = cash + held_value
     pnl = equity - deposited
 
@@ -272,6 +281,7 @@ def _get_paper_sandbox_summary(prices_cache: str, monitor_quotes: dict, swing_pa
     paper_charts = {k: v for k, v in all_charts.items() if k != "SHYAMMETL"}
 
     swing_data = _read_json(swing_path or "data/swing_status.json")
+    paper_signals = _read_json("data/paper_ai_signals.json")
 
     return {
         "mode": "PAPER (Autonomous Simulation)",
@@ -281,12 +291,13 @@ def _get_paper_sandbox_summary(prices_cache: str, monitor_quotes: dict, swing_pa
         "deposited": deposited,
         "pnl": pnl,
         "pnl_pct": (pnl / deposited) if deposited else None,
-        "total_costs": 38.01,
+        "total_costs": total_costs,
         "holdings": holdings,
         "trades": paper_trades[-25:][::-1],
         "charts": paper_charts,
         "swing": swing_data,
-        "last_rebalance": "2026-11-09",
+        "ai_signals": paper_signals,
+        "last_rebalance": state.get("last_rebalance", "2026-11-09"),
         "next_rebalance": "2027-02-09",
     }
 
@@ -4892,6 +4903,7 @@ async function load() {
       ]))
     ]);
   }
+  window.lastDashboardData = d;
   renderHoldingsCharts(d.charts, d.monitor);
   renderPaperSandbox(d.paper_sandbox);
   renderUSStocks(d.us_stocks);
@@ -5253,6 +5265,15 @@ function switchMarket(m) {
   if (btnLive) btnLive.classList.toggle('active', mode === 'live');
   if (btnPaper) btnPaper.classList.toggle('active', mode === 'paper');
   if (btnUS) btnUS.classList.toggle('active', mode === 'us');
+
+  // Dynamically update AI Analyst card for active market tab
+  if (window.lastDashboardData) {
+    if (mode === 'paper' && window.lastDashboardData.paper_sandbox && window.lastDashboardData.paper_sandbox.ai_signals && window.lastDashboardData.paper_sandbox.ai_signals.verdict) {
+      renderAI(window.lastDashboardData.paper_sandbox.ai_signals, window.lastDashboardData.api_budget);
+    } else if (mode === 'live' && window.lastDashboardData.ai_signals) {
+      renderAI(window.lastDashboardData.ai_signals, window.lastDashboardData.api_budget);
+    }
+  }
 
   try { localStorage.setItem('alvi_active_market', mode); } catch(e){}
   try {

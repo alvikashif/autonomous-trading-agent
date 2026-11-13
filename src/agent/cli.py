@@ -484,6 +484,8 @@ def cmd_api_budget(args, cfg) -> None:
 
 
 def cmd_ai_scan(args, cfg) -> None:
+    import json
+    import os
     from .ai_brain import (
         build_analysis_prompt,
         clean_json_response,
@@ -494,30 +496,72 @@ def cmd_ai_scan(args, cfg) -> None:
     )
 
     ai = cfg.ai
-    provider = ai.resolved_provider()
-    model = ai.resolved_model()
-    api_key = ai.resolved_api_key()
+    is_paper = bool(getattr(args, "paper", False))
+    provider_override = getattr(args, "provider", None)
 
-    print(f"Scanning for AI swing opportunities using {provider.upper()} ({model})...")
+    if is_paper and not provider_override:
+        provider = "gemini"
+    elif provider_override:
+        provider = provider_override.lower().strip()
+    else:
+        provider = ai.resolved_provider()
+
+    if provider in ("gemini", "google"):
+        model = "gemini-3.5-flash"
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip() or ai.resolved_api_key()
+    else:
+        model = ai.resolved_model()
+        api_key = ai.resolved_api_key()
+
+    mode_label = "PAPER SANDBOX" if is_paper else "LIVE DEMAT"
+    print(f"Scanning for AI swing opportunities [{mode_label}] using {provider.upper()} ({model})...")
 
     elig = _eligible_report(cfg.universe.screen_report_csv)
     if elig.empty:
         raise SystemExit("No compliant stocks found. Run `agent screen` first.")
     compliant_symbols = set(elig["symbol"])
 
-    # Exclude symbols already held in active Demat account
+    # Exclude symbols already held
     held_symbols = set()
-    b_cfg = cfg.broker
-    if b_cfg.resolved_api_key() and b_cfg.resolved_totp_secret():
-        try:
-            from .broker import GrowwBroker
-            broker = GrowwBroker(api_key=b_cfg.resolved_api_key(), totp_secret=b_cfg.resolved_totp_secret(), token_cache_path=b_cfg.token_cache_path)
-            broker.authenticate()
-            held_symbols = set(broker.positions().keys())
-            if held_symbols:
-                print(f"Active Demat holdings excluded from new candidate scan: {', '.join(sorted(held_symbols))}")
-        except Exception:
-            pass
+    if is_paper:
+        paper_file = Path("data/paper_sandbox_state.json")
+        if paper_file.is_file():
+            try:
+                p_state = json.loads(paper_file.read_text(encoding="utf-8"))
+                held_symbols.update(k for k, v in p_state.get("positions", {}).items() if int(v) > 0)
+            except Exception:
+                pass
+        # Also exclude live Demat holdings so simulation explores fresh opportunities
+        held_symbols.add("SHYAMMETL")
+        live_file = Path("data/live_trades.json")
+        if live_file.is_file():
+            try:
+                l_trades = json.loads(live_file.read_text(encoding="utf-8"))
+                l_pos = {}
+                for t in l_trades:
+                    s = t.get("symbol")
+                    q = int(t.get("qty", 0))
+                    if t.get("side") == "BUY":
+                        l_pos[s] = l_pos.get(s, 0) + q
+                    elif t.get("side") == "SELL":
+                        l_pos[s] = max(0, l_pos.get(s, 0) - q)
+                held_symbols.update(s for s, q in l_pos.items() if q > 0)
+            except Exception:
+                pass
+        if held_symbols:
+            print(f"Active Paper Sandbox & Live Demat holdings excluded from new candidate scan: {', '.join(sorted(held_symbols))}")
+    else:
+        b_cfg = cfg.broker
+        if b_cfg.resolved_api_key() and b_cfg.resolved_totp_secret():
+            try:
+                from .broker import GrowwBroker
+                broker = GrowwBroker(api_key=b_cfg.resolved_api_key(), totp_secret=b_cfg.resolved_totp_secret(), token_cache_path=b_cfg.token_cache_path)
+                broker.authenticate()
+                held_symbols = set(broker.positions().keys())
+                if held_symbols:
+                    print(f"Active Demat holdings excluded from new candidate scan: {', '.join(sorted(held_symbols))}")
+            except Exception:
+                pass
     compliant_symbols = {s for s in compliant_symbols if s not in held_symbols}
 
     prices_path = cfg.universe.prices_cache_csv
@@ -528,19 +572,22 @@ def cmd_ai_scan(args, cfg) -> None:
     fund_path = cfg.universe.fundamentals_csv
     fund_df = load_fundamentals(fund_path) if Path(fund_path).is_file() else pd.DataFrame()
 
+    # Position allocation sizing: 1 Lac paper sandbox allows Rs 25,000 per position (4 positions max)
+    scan_capital = 25000.0 if is_paper else ai.resolved_max_allocation()
+
     candidates = extract_technical_candidates(
         prices_df,
         compliant_symbols,
         fund_df,
         max_candidates=10,
-        max_price=ai.resolved_max_allocation(),
+        max_price=scan_capital,
     )
 
     if not candidates:
         print("No breakout candidates found within price and technical criteria.")
         return
 
-    print(f"Found {len(candidates)} pre-screened breakout candidates (max Rs {ai.resolved_max_allocation():,.0f}):")
+    print(f"Found {len(candidates)} pre-screened breakout candidates (max Rs {scan_capital:,.0f}):")
     for c in candidates:
         print(f"  {c['symbol']:<12} Rs {c['current_price']:<8.2f} (20d ret: +{c['ret_20d_pct']}%, RSI: {c['rsi_14']})")
 
@@ -556,7 +603,7 @@ def cmd_ai_scan(args, cfg) -> None:
 
     prompt = build_analysis_prompt(
         candidates=candidates,
-        capital=ai.resolved_max_allocation(),
+        capital=scan_capital,
         min_confidence=ai.resolved_min_confidence(),
         target_pct=ai.target_pct,
         stop_pct=ai.stop_pct,
@@ -573,10 +620,12 @@ def cmd_ai_scan(args, cfg) -> None:
     validated = validate_ai_decision(parsed, compliant_symbols, min_confidence=ai.resolved_min_confidence())
     validated["provider"] = actual_prov
     validated["model"] = actual_model
+    validated["mode"] = "PAPER" if is_paper else "LIVE"
 
-    save_ai_signals(validated, cfg.universe.ai_signals_json)
-    print(f"Analysis saved to {cfg.universe.ai_signals_json}")
-    print("\n--- AI Brain Decision ---")
+    out_path = getattr(args, "out", None) or ("data/paper_ai_signals.json" if is_paper else cfg.universe.ai_signals_json)
+    save_ai_signals(validated, out_path)
+    print(f"Analysis saved to {out_path}")
+    print(f"\n--- AI Brain Decision [{mode_label}] ---")
     print(f"Verdict         : {validated.get('verdict')}")
     print(f"Market Regime   : {validated.get('market_regime', '').upper()}")
     print(f"Summary         : {validated.get('decision_summary')}")
@@ -598,14 +647,26 @@ def cmd_ai_trade(args, cfg) -> None:
     from .broker import GrowwBroker
     from .kill_switch import is_kill_switch_active
     from .models import Order, Side
+    from .paper import PaperBroker
 
     # Emergency Kill Switch Check
     if is_kill_switch_active(cfg.universe.kill_switch_json):
         raise SystemExit("EMERGENCY KILL SWITCH IS ACTIVE! All trading orders are blocked.")
 
-    signals = load_ai_signals(cfg.universe.ai_signals_json)
+    is_live = bool(getattr(args, "live", False))
+    is_paper = bool(getattr(args, "paper", False)) or (not is_live)
+
+    # Resolve signals file
+    signals_path = getattr(args, "signals", None)
+    if not signals_path:
+        if is_paper and Path("data/paper_ai_signals.json").is_file():
+            signals_path = "data/paper_ai_signals.json"
+        else:
+            signals_path = cfg.universe.ai_signals_json
+
+    signals = load_ai_signals(signals_path)
     if not signals:
-        raise SystemExit("No AI signals found. Run `agent ai-scan` first.")
+        raise SystemExit(f"No AI signals found at {signals_path}. Run `agent ai-scan{' --paper' if is_paper else ''}` first.")
 
     verdict = signals.get("verdict")
     selected = signals.get("selected_trade")
@@ -622,8 +683,7 @@ def cmd_ai_trade(args, cfg) -> None:
         print(f"Aborting: Conviction {confidence:.1f} is below minimum threshold {min_conf:.1f}.")
         return
 
-    max_alloc = cfg.ai.resolved_max_allocation()
-    broker_mode = "live" if args.live else "paper"
+    broker_mode = "live" if is_live else "paper"
 
     print(f"=== AI Trade Execution [{broker_mode.upper()} MODE] ===")
     print(f"Stock        : {symbol}")
@@ -632,12 +692,82 @@ def cmd_ai_trade(args, cfg) -> None:
     print(f"Stop Loss    : Rs {selected['stop_loss']:.2f} (-4%)")
     print(f"Conviction   : {confidence:.1f} / 10.0")
 
-    if not args.live:
-        sizing = compute_order_size(selected, max_alloc)
-        qty = sizing["qty"]
-        trade_val = sizing["trade_value"]
-        print(f"Position Size: {qty} shares @ Rs {entry_px:.2f} = Rs {trade_val:,.2f}")
-        print("PAPER MODE: Trade registered in simulation state.")
+    # PAPER SANDBOX EXECUTION (₹1,00,000 Capital)
+    if is_paper:
+        state_path = getattr(args, "state", None) or "data/paper_sandbox_state.json"
+        p_path = Path(state_path)
+        if not p_path.is_file():
+            p_path.parent.mkdir(parents=True, exist_ok=True)
+            init_state = {
+                "cash": 100000.0,
+                "positions": {},
+                "total_costs": 0.0,
+                "deposits": [{"date": datetime.now().strftime("%Y-%m-%d"), "amount": 100000.0}],
+                "last_rebalance": datetime.now().strftime("%Y-%m-%d"),
+                "trades": [],
+            }
+            p_path.write_text(json.dumps(init_state, indent=2), encoding="utf-8")
+
+        broker = PaperBroker(state_path, cfg.costs)
+        if broker.cash() <= 0 and not broker.deposits:
+            broker.deposit(100000.0)
+            broker.save()
+
+        # Check if already held in Paper Sandbox
+        current_positions = broker.positions()
+        if symbol in current_positions and current_positions[symbol] > 0:
+            print(f"Skipping paper trade: {symbol} is already held in Paper Sandbox ({current_positions[symbol]} shares).")
+            return
+
+        max_paper_pos = 5
+        if len(current_positions) >= max_paper_pos:
+            print(f"Skipping paper trade: Maximum concurrent paper positions reached ({len(current_positions)}/{max_paper_pos}).")
+            return
+
+        paper_cash = broker.cash()
+        print(f"Available Paper Sandbox Cash: Rs {paper_cash:,.2f}")
+
+        # Sizing: up to Rs 25,000 allocation per position
+        max_alloc = min(paper_cash, 25000.0)
+        qty = int(max_alloc / entry_px)
+        if qty <= 0 and paper_cash >= entry_px:
+            qty = 1
+
+        if qty <= 0:
+            print(f"Insufficient paper funds: 1 share is Rs {entry_px:.2f}, balance is Rs {paper_cash:.2f}")
+            return
+
+        trade_val = qty * entry_px
+        print(f"Order: PAPER BUY {qty} shares of {symbol} @ Rs {entry_px:.2f} (Est: Rs {trade_val:,.2f})")
+
+        if args.dry_run:
+            print("DRY RUN: Paper trade calculation complete, no order recorded.")
+            return
+
+        order = Order(symbol=symbol, side=Side.BUY, qty=qty, price=entry_px)
+        broker.place_order(order)
+        broker.save()
+        print(f"SUCCESS: Executed Paper BUY {qty} shares of {symbol} @ Rs {entry_px:.2f} in ₹1 Lac Sandbox.")
+
+        # Mark executed in signals
+        selected["executed"] = True
+        selected["executed_qty"] = qty
+        selected["executed_price"] = entry_px
+        selected["executed_at"] = datetime.now().isoformat()
+        save_ai_signals(signals, signals_path)
+
+        # Dispatch notification
+        try:
+            from .notify import dispatch_notification
+            dispatch_notification(
+                event_type="buy",
+                title=f"🧪 [PAPER BUY] {qty} {symbol}",
+                message=f"Gemini AI Paper Trade executed: BUY {qty} shares of {symbol} @ Rs {entry_px:,.2f} (Total: Rs {trade_val:,.2f}) in ₹1 Lac Sandbox",
+                details={"symbol": symbol, "qty": qty, "price": entry_px, "trade_val": trade_val, "mode": "PAPER_SANDBOX", "provider": signals.get("provider", "gemini")},
+                path=cfg.universe.notifications_json,
+            )
+        except Exception as e:
+            print(f"Notification error: {e}")
         return
 
     # LIVE Groww Execution
@@ -863,11 +993,17 @@ def main(argv: list[str] | None = None) -> None:
 
     aic = sub.add_parser("ai-scan", help="Scan universe with AI Brain (Anthropic/DeepSeek/OpenAI/Gemini)")
     aic.add_argument("--dry-run", action="store_true", help="extract candidates and format prompt without calling AI API")
+    aic.add_argument("--paper", action="store_true", help="scan for paper sandbox simulation (uses Gemini API & 1 Lac capital)")
+    aic.add_argument("--provider", help="AI provider override (claude, deepseek, openai, gemini)")
+    aic.add_argument("--out", help="output path for AI signals JSON (defaults to data/paper_ai_signals.json for --paper)")
 
     ait = sub.add_parser("ai-trade", help="Execute trade based on latest AI Brain recommendation")
     ait.add_argument("--live", action="store_true", help="execute LIVE real-money order on Groww (Delivery CNC)")
-    ait.add_argument("--dry-run", action="store_true", help="simulate order calculations without sending to Groww")
+    ait.add_argument("--paper", action="store_true", help="execute paper trade in ₹1 Lac simulation sandbox")
+    ait.add_argument("--dry-run", action="store_true", help="simulate order calculations without sending orders")
     ait.add_argument("--yes", action="store_true", help="skip confirmation prompt in live mode")
+    ait.add_argument("--signals", help="path to AI signals JSON (defaults to paper_ai_signals.json for paper mode)")
+    ait.add_argument("--state", help="path to state JSON (defaults to paper_sandbox_state.json for paper mode)")
 
     aie = sub.add_parser("ai-eval-exit", help="Ask AI Brain whether to take profit or trail higher on a winning trade")
     aie.add_argument("--symbol", required=True, help="stock symbol to evaluate (e.g. SHYAMMETL)")

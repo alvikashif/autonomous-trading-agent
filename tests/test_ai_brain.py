@@ -370,3 +370,31 @@ def test_claude_to_gemini_automatic_failover_on_budget_exhaustion(monkeypatch):
         assert mock_gemini.call_count == 1
 
 
+def test_paper_trading_1_lac_capital_and_execution(tmp_path):
+    from agent.paper import PaperBroker
+    from agent.models import Order, Side
+    from agent.costs import CostConfig
+
+    state_file = tmp_path / "paper_sandbox_state.json"
+    broker = PaperBroker(state_file, CostConfig())
+    broker.deposit(100000.0)
+    assert broker.cash() == 100000.0
+
+    # Place simulated buy order for 5 shares @ 4259.70
+    order = Order(symbol="LTTS", side=Side.BUY, qty=5, price=4259.70)
+    broker.place_order(order)
+    broker.save()
+
+    assert broker.positions()["LTTS"] == 5
+    assert broker.cash() < 100000.0
+    assert len(broker.trades) == 1
+    assert broker.equity({"LTTS": 4259.70}) > 99000.0
+
+    # Reload broker from disk to verify persistence
+    reloaded = PaperBroker(state_file, CostConfig())
+    assert reloaded.positions()["LTTS"] == 5
+    assert reloaded.trades[0]["symbol"] == "LTTS"
+    assert reloaded.trades[0]["qty"] == 5
+
+
+
