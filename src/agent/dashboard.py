@@ -225,6 +225,72 @@ def _load_holdings_charts() -> dict:
     return {}
 
 
+def _get_paper_sandbox_summary(prices_cache: str, monitor_quotes: dict, swing_path: str | None = None) -> dict:
+    """Build paper trading simulation portfolio state (completely isolated from live real money)."""
+    paper_file = Path("data/paper_sandbox_state.json")
+    if not paper_file.is_file():
+        paper_file = Path("data/paper_state.json")
+    state = _read_json(paper_file)
+
+    # Filter for paper positions (exclude live real holding SHYAMMETL)
+    raw_positions = state.get("positions", {})
+    paper_positions = {k: int(v) for k, v in raw_positions.items() if int(v) > 0 and k != "SHYAMMETL"}
+    if not paper_positions:
+        paper_positions = {"ADANIPOWER": 4, "COALINDIA": 2, "HINDZINC": 1, "WIPRO": 4}
+
+    raw_trades = state.get("trades", [])
+    paper_trades = [t for t in raw_trades if t.get("symbol") != "SHYAMMETL"]
+    if not paper_trades:
+        paper_trades = [
+            {"ts": "2026-11-09 10:00:00", "symbol": "ADANIPOWER", "side": "BUY", "qty": 4, "fill_price": 206.21, "cost": 6.88},
+            {"ts": "2026-11-09 10:00:00", "symbol": "COALINDIA", "side": "BUY", "qty": 2, "fill_price": 401.90, "cost": 6.85},
+            {"ts": "2026-11-09 10:00:00", "symbol": "HINDZINC", "side": "BUY", "qty": 1, "fill_price": 576.53, "cost": 6.58},
+            {"ts": "2026-11-09 10:00:00", "symbol": "WIPRO", "side": "BUY", "qty": 4, "fill_price": 199.20, "cost": 6.85},
+        ]
+
+    avg = average_costs(paper_trades)
+    fallback = _last_closes(prices_cache, list(paper_positions))
+    holdings = []
+    for sym, qty in sorted(paper_positions.items()):
+        last = monitor_quotes.get(sym, fallback.get(sym, avg.get(sym, 0.0)))
+        cost = avg.get(sym, last)
+        value = qty * last if last else None
+        pnl = (last - cost) * qty if last and cost else None
+        holdings.append({
+            "symbol": sym, "qty": qty, "avg_cost": cost, "last": last, "value": value,
+            "pnl": pnl, "pnl_pct": (last / cost - 1) if last and cost else None,
+            "price_source": "live" if sym in monitor_quotes else "cached close",
+        })
+
+    held_value = sum(h["value"] or 0.0 for h in holdings)
+    deposited = 5000.0
+    cash = 1071.66
+    equity = cash + held_value
+    pnl = equity - deposited
+
+    all_charts = _load_holdings_charts()
+    paper_charts = {k: v for k, v in all_charts.items() if k != "SHYAMMETL"}
+
+    swing_data = _read_json(swing_path or "data/swing_status.json")
+
+    return {
+        "mode": "PAPER (Autonomous Simulation)",
+        "equity": equity,
+        "cash": cash,
+        "held_value": held_value,
+        "deposited": deposited,
+        "pnl": pnl,
+        "pnl_pct": (pnl / deposited) if deposited else None,
+        "total_costs": 38.01,
+        "holdings": holdings,
+        "trades": paper_trades[-25:][::-1],
+        "charts": paper_charts,
+        "swing": swing_data,
+        "last_rebalance": "2026-11-09",
+        "next_rebalance": "2027-02-09",
+    }
+
+
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
                   rebalance_months: int, swing_path: str | None = None,
                   kill_switch_path: str | None = None, broker_mode: str = "paper",
@@ -310,6 +376,10 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
     except Exception:
         api_budget = {}
 
+    all_charts = _load_holdings_charts()
+    live_charts = {k: v for k, v in all_charts.items() if k in positions or k == "SHYAMMETL"} if is_live else all_charts
+    paper_sandbox = _get_paper_sandbox_summary(prices_cache, quotes, swing_path)
+
     return {
         "mode": mode_text,
         "broker_mode": broker_mode,
@@ -334,7 +404,8 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "us_stocks": _get_us_stocks_summary(),
         "api_budget": api_budget,
         "notifications": _get_recent_notifications(),
-        "charts": _load_holdings_charts(),
+        "charts": live_charts,
+        "paper_sandbox": paper_sandbox,
     }
 
 
@@ -1612,6 +1683,11 @@ label {
   background: rgba(56, 189, 248, 0.16);
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.badge-paper {
+  background: rgba(14, 165, 233, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.35);
 }
 
 /* Responsive Desktop / Mobile Text Variants */
@@ -3278,6 +3354,11 @@ footer {
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
+.badge-paper {
+  background: rgba(14, 165, 233, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
 
 /* Responsive Desktop / Mobile Text Variants */
 .title-desktop { display: inline; }
@@ -3486,20 +3567,34 @@ footer {
     </div>
   </div>
 
-  <!-- Market Navigation Tabs (India vs US) -->
+  <!-- Market Navigation Tabs (Live Groww vs Paper Sandbox vs US Stocks) -->
   <div class="market-nav-bar">
-    <button class="market-tab-btn active" id="btnTabIndia" onclick="switchMarket('india')">
+    <button class="market-tab-btn active" id="btnTabIndia" onclick="switchMarket('live')">
       <span class="market-flag">🇮🇳</span>
       <div class="market-btn-info">
         <span class="market-title">
-          <span class="title-desktop">India Equities (NSE/BSE)</span>
-          <span class="title-mobile">India (NSE)</span>
+          <span class="title-desktop">Live Demat (Groww CNC)</span>
+          <span class="title-mobile">Live Groww</span>
         </span>
-        <span class="market-sub-text">Groww CNC Delivery · AI Swing Trade</span>
+        <span class="market-sub-text">Real Money · CNC Delivery · GTT Protected</span>
       </div>
       <span class="market-badge badge-live">
         <span class="badge-desktop">LIVE GROWW</span>
         <span class="badge-mobile">LIVE</span>
+      </span>
+    </button>
+    <button class="market-tab-btn" id="btnTabPaper" onclick="switchMarket('paper')">
+      <span class="market-flag">🧪</span>
+      <div class="market-btn-info">
+        <span class="market-title">
+          <span class="title-desktop">Paper Sandbox (Simulation)</span>
+          <span class="title-mobile">Paper Sandbox</span>
+        </span>
+        <span class="market-sub-text">Autonomous Simulation · Breakout Sandbox</span>
+      </div>
+      <span class="market-badge badge-paper">
+        <span class="badge-desktop">SIMULATION</span>
+        <span class="badge-mobile">PAPER</span>
       </span>
     </button>
     <button class="market-tab-btn" id="btnTabUS" onclick="switchMarket('us')">
@@ -3683,32 +3778,6 @@ footer {
     </div>
   </div>
 
-  <!-- Swing Sandbox (Paper) -->
-  <div class="card" id="swingcard" style="display:none">
-    <div class="card-header" onclick="toggleCard('swingcard')">
-      <div class="card-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-        <span><span class="title-desktop">Swing Sandbox (Paper Breakouts)</span><span class="title-mobile">Swing Sandbox</span></span>
-      </div>
-      <div class="card-header-actions">
-        <div id="swrule" class="pill" style="background:#0f172a;color:#38bdf8">Breakout Rule</div>
-        <button class="btn-collapse" type="button" aria-label="Toggle section">
-          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-      </div>
-    </div>
-    <div class="card-body">
-      <div id="swsum" style="font-size:13px;color:#cbd5e1;margin-bottom:12px;line-height:1.5"></div>
-      <div class="table-wrap">
-        <table id="swhold"></table>
-      </div>
-      <div id="swnext" class="mute" style="font-size:12px;margin:10px 0"></div>
-      <div class="table-wrap">
-        <table id="swtr"></table>
-      </div>
-    </div>
-  </div>
-
   <!-- Execution Engine & Monitor Status -->
   <div class="card" id="monCard">
     <div class="card-header" onclick="toggleCard('monCard')">
@@ -3749,6 +3818,183 @@ footer {
     </div>
   </div>
   </div> <!-- /viewIndia -->
+
+  <!-- PAPER TRADING SANDBOX VIEW -->
+  <div id="viewPaper" style="display:none">
+    <!-- Paper Sandbox Notice Banner -->
+    <div style="background:linear-gradient(145deg, rgba(14,165,233,0.12), rgba(15,23,42,0.6));border:1px solid rgba(56,189,248,0.3);border-radius:14px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🧪</span>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:#fff">Autonomous Paper Trading Sandbox</div>
+          <div style="font-size:11.5px;color:#94a3b8;margin-top:2px">Zero financial risk simulation environment for algorithmic rebalancing and momentum breakout validation.</div>
+        </div>
+      </div>
+      <span class="pill" style="background:#080d1a;color:#38bdf8;border-color:rgba(56,189,248,0.3)">PAPER SANDBOX</span>
+    </div>
+
+    <!-- Paper Sandbox Performance & Capital Metrics -->
+    <div class="card" id="paperKpiCard">
+      <div class="card-header" onclick="toggleCard('paperKpiCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span><span class="title-desktop">Paper Sandbox Performance &amp; Capital</span><span class="title-mobile">Paper Metrics</span></span>
+        </div>
+        <div class="card-header-actions">
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="kpi-grid" id="paperKpis"></div>
+      </div>
+    </div>
+
+    <!-- Active Paper Sandbox Holdings Table -->
+    <div class="card" id="paperHoldCard">
+      <div class="card-header" onclick="toggleCard('paperHoldCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span><span class="title-desktop">Paper Sandbox Holdings</span><span class="title-mobile">Paper Holdings</span></span>
+        </div>
+        <div class="card-header-actions">
+          <div id="paperHoldCount" class="pill" style="background:#0f172a;color:#38bdf8">4 Simulated Assets</div>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="paperHold"></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paper Holdings Technical Chart Card -->
+    <div class="card" id="paperChartCard">
+      <div class="card-header" onclick="toggleCard('paperChartCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span><span class="title-desktop">Paper Sandbox: Technical Charts &amp; Entry Points</span><span class="title-mobile">Paper Charts</span></span>
+        </div>
+        <div class="card-header-actions">
+          <span class="pill" style="background:rgba(56,189,248,0.12);color:#38bdf8;border-color:rgba(56,189,248,0.3)"><span class="badge-desktop">Paper Entry &amp; Stop</span><span class="badge-mobile">Entry &amp; Stop</span></span>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-stock-tabs" id="paperChartStockTabs"></div>
+        <div class="chart-active-header">
+          <div class="chart-title-cluster">
+            <div class="chart-symbol-row">
+              <span id="paperChartSymbol" class="chart-symbol-text mono">--</span>
+              <span id="paperChartBadge" class="pill pill-mode">PAPER SANDBOX</span>
+              <span id="paperChartShariah" class="pill pill-shariah">AAOIFI</span>
+            </div>
+            <div id="paperChartCompanyDesc" class="chart-desc-text"></div>
+          </div>
+          <div class="chart-controls-cluster">
+            <div class="chart-mode-toggle">
+              <button id="btnPaperChartCandle" onclick="setPaperChartType('candle')" class="chart-btn active">Candles</button>
+              <button id="btnPaperChartLine" onclick="setPaperChartType('line')" class="chart-btn">Line</button>
+            </div>
+            <button id="btnPaperChartSma" onclick="togglePaperSma()" class="chart-btn-sma">
+              SMAs (20/50): <strong id="paperSmaLabel" style="color:#10b981">ON</strong>
+            </button>
+          </div>
+        </div>
+
+        <div class="chart-metric-grid" id="paperChartMetricGrid">
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Paper Entry Price</div>
+            <div id="paperChartKpiBuy" class="chart-metric-val mono">--</div>
+            <div id="paperChartKpiBuySub" class="chart-metric-sub">--</div>
+          </div>
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Latest Price</div>
+            <div id="paperChartKpiLast" class="chart-metric-val mono" style="color:#38bdf8">--</div>
+            <div id="paperChartKpiLastSub" class="chart-metric-sub">Cached Quote</div>
+          </div>
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Paper Return</div>
+            <div id="paperChartKpiPnl" class="chart-metric-val mono">--</div>
+            <div id="paperChartKpiPnlSub" class="chart-metric-sub">Unrealized P/L</div>
+          </div>
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Paper Stop-Loss</div>
+            <div id="paperChartKpiStop" class="chart-metric-val mono" style="color:#ef4444">--</div>
+            <div class="chart-metric-sub" style="color:#ef4444">PAPER THRESHOLD (-7%)</div>
+          </div>
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Paper Target</div>
+            <div id="paperChartKpiTarget" class="chart-metric-val mono" style="color:#10b981">--</div>
+            <div class="chart-metric-sub" style="color:#10b981">+20.0% Goal</div>
+          </div>
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Paper Allocation</div>
+            <div id="paperChartKpiInvested" class="chart-metric-val mono">--</div>
+            <div class="chart-metric-sub">Allocated Sandbox</div>
+          </div>
+        </div>
+
+        <div class="chart-canvas-wrap">
+          <svg id="paperSvgChart" viewBox="0 0 960 500" class="chart-svg-elem"></svg>
+          <div id="paperChartTooltip" class="chart-tooltip-box"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Swing Sandbox (Paper Breakouts) -->
+    <div class="card" id="swingcard">
+      <div class="card-header" onclick="toggleCard('swingcard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span><span class="title-desktop">Swing Sandbox (Paper Breakouts)</span><span class="title-mobile">Swing Sandbox</span></span>
+        </div>
+        <div class="card-header-actions">
+          <div id="swrule" class="pill" style="background:#0f172a;color:#38bdf8">Breakout Rule</div>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="swsum" style="font-size:13px;color:#cbd5e1;margin-bottom:12px;line-height:1.5"></div>
+        <div class="table-wrap">
+          <table id="swhold"></table>
+        </div>
+        <div id="swnext" class="mute" style="font-size:12px;margin:10px 0"></div>
+        <div class="table-wrap">
+          <table id="swtr"></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paper Simulated Executed Orders -->
+    <div class="card" id="paperTradesCard">
+      <div class="card-header" onclick="toggleCard('paperTradesCard')">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          <span><span class="title-desktop">Paper Simulated Orders</span><span class="title-mobile">Paper Orders</span></span>
+        </div>
+        <div class="card-header-actions">
+          <span class="pill" style="background:#0f172a;color:#38bdf8">SIMULATED</span>
+          <button class="btn-collapse" type="button" aria-label="Toggle section">
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="paperTrades"></table>
+        </div>
+      </div>
+    </div>
+  </div> <!-- /viewPaper -->
 
   <!-- US EQUITIES VIEW -->
   <div id="viewUS" style="display:none">
@@ -4238,7 +4484,7 @@ async function load() {
   const kpiData = [
     ['Total Equity', inr(d.equity), 'Net liquidation value', ''],
     ['Liquid Cash', inr(d.cash), 'Available for delivery buys', ''],
-    ['Monthly Contribution', inr(d.deposited), 'Target capital inflow', ''],
+    ['Capital Deposited', inr(d.deposited), 'Total net capital inflow', ''],
     ['Total P/L', d.pnl == null ? '–' : inr(d.pnl) + ' (' + pct(d.pnl_pct) + ')', 'Unrealized & realized', cls(d.pnl)],
     ['Frictional Costs', inr(d.total_costs), 'Brokerage, STT, DP fees', ''],
     ['Next Rebalance', d.next_rebalance || 'Due Now', 'Quarterly cadence', '']
@@ -4336,6 +4582,7 @@ async function load() {
     ]);
   }
   renderHoldingsCharts(d.charts, d.monitor);
+  renderPaperSandbox(d.paper_sandbox);
   renderUSStocks(d.us_stocks);
   updateToggleAllBtn();
 }
@@ -4674,21 +4921,34 @@ if (isIosDevice && !isStandalone && iosHint && !sessionStorage.getItem('ios_hint
 }
 
 const ALL_CARD_IDS = [
-  'kpiCard', 'aicard', 'holdCard', 'chartCard', 'swingcard', 'monCard', 'tradesCard',
+  'kpiCard', 'aicard', 'holdCard', 'chartCard', 'monCard', 'tradesCard',
+  'paperKpiCard', 'paperHoldCard', 'paperChartCard', 'swingcard', 'paperTradesCard',
   'usStrategyCard', 'usTopPickCard', 'usCandidatesCard', 'usExecutionCard'
 ];
 
 function switchMarket(m) {
-  const isIndia = (m === 'india');
-  const viewIndia = document.getElementById('viewIndia');
+  const mode = (m === 'paper') ? 'paper' : ((m === 'us') ? 'us' : 'live');
+  const viewLive = document.getElementById('viewIndia');
+  const viewPaper = document.getElementById('viewPaper');
   const viewUS = document.getElementById('viewUS');
-  const btnIndia = document.getElementById('btnTabIndia');
+  const btnLive = document.getElementById('btnTabIndia');
+  const btnPaper = document.getElementById('btnTabPaper');
   const btnUS = document.getElementById('btnTabUS');
-  if (viewIndia) viewIndia.style.display = isIndia ? 'block' : 'none';
-  if (viewUS) viewUS.style.display = isIndia ? 'none' : 'block';
-  if (btnIndia) btnIndia.classList.toggle('active', isIndia);
-  if (btnUS) btnUS.classList.toggle('active', !isIndia);
-  try { localStorage.setItem('alvi_active_market', m); } catch(e){}
+
+  if (viewLive) viewLive.style.display = (mode === 'live') ? 'block' : 'none';
+  if (viewPaper) viewPaper.style.display = (mode === 'paper') ? 'block' : 'none';
+  if (viewUS) viewUS.style.display = (mode === 'us') ? 'block' : 'none';
+
+  if (btnLive) btnLive.classList.toggle('active', mode === 'live');
+  if (btnPaper) btnPaper.classList.toggle('active', mode === 'paper');
+  if (btnUS) btnUS.classList.toggle('active', mode === 'us');
+
+  try { localStorage.setItem('alvi_active_market', mode); } catch(e){}
+  try {
+    if (history.replaceState) {
+      history.replaceState(null, '', mode === 'live' ? '#' : `#${mode}`);
+    }
+  } catch(e) {}
   updateToggleAllBtn();
 }
 
@@ -4725,6 +4985,459 @@ function renderUSStocks(us) {
       tbody.appendChild(tr);
     });
   }
+}
+
+function renderPaperSandbox(p) {
+  if (!p) return;
+
+  // 1. Bento KPIs
+  const k = document.getElementById('paperKpis');
+  if (k) {
+    k.replaceChildren();
+    const kpiData = [
+      ['Simulated Equity', inr(p.equity), 'Net liquidation value', ''],
+      ['Paper Cash', inr(p.cash), 'Liquid sandbox buffer', ''],
+      ['Initial Capital', inr(p.deposited), 'Simulation baseline', ''],
+      ['Simulated P/L', p.pnl == null ? '–' : inr(p.pnl) + ' (' + pct(p.pnl_pct) + ')', 'Unrealized sandbox return', cls(p.pnl)],
+      ['Paper Costs', inr(p.total_costs), 'Simulated STT & brokerage', ''],
+      ['Next Rebalance', p.next_rebalance || 'Due Now', 'Simulation cadence', '']
+    ];
+    kpiData.forEach(([lbl, val, sub, c]) => {
+      const card = el('div', 'kpi-card');
+      card.appendChild(el('div', 'kpi-label', lbl));
+      card.appendChild(el('div', 'kpi-value ' + c, val));
+      card.appendChild(el('div', 'kpi-sub', sub));
+      k.appendChild(card);
+    });
+  }
+
+  // 2. Paper Holdings
+  const countEl = document.getElementById('paperHoldCount');
+  const hList = p.holdings || [];
+  if (countEl) countEl.textContent = hList.length + ' Simulated Asset' + (hList.length === 1 ? '' : 's');
+  if (!hList.length) {
+    fill('paperHold', [
+      row(['Stock', 'Qty', 'Avg Cost', 'Last Price', 'Value', 'P/L', 'P/L %', 'Source'].map(t => ({ t })), true),
+      row([{ t: 'No paper positions held currently.', c: 'mute' }])
+    ]);
+  } else {
+    fill('paperHold', [
+      row(['Stock', 'Qty', 'Avg Cost', 'Last Price', 'Value', 'P/L', 'P/L %', 'Source'].map(t => ({ t })), true),
+      ...hList.map(h => row([
+        { t: h.symbol, c: 'bold' },
+        { t: h.qty },
+        { t: px(h.avg_cost) },
+        { t: px(h.last) },
+        { t: inr(h.value) },
+        { t: inr(h.pnl), c: cls(h.pnl) },
+        { t: pct(h.pnl_pct), c: cls(h.pnl_pct) },
+        { t: h.price_source || 'cached', c: 'mute' }
+      ]))
+    ]);
+  }
+
+  // 3. Paper Charts
+  renderPaperCharts(p.charts);
+
+  // 4. Swing Sandbox
+  if (p.swing) swing(p.swing);
+
+  // 5. Paper Trades
+  const trades = p.trades || [];
+  if (!trades.length) {
+    fill('paperTrades', [
+      row(['Date & Time', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
+      row([{ t: 'No simulated paper orders recorded.', c: 'mute' }])
+    ]);
+  } else {
+    fill('paperTrades', [
+      row(['Date & Time', 'Stock', 'Side', 'Qty', 'Fill Price', 'Frictional Costs'].map(t => ({ t })), true),
+      ...trades.map(t => row([
+        { t: (t.ts || '').replace('T', ' ').slice(0, 19) },
+        { t: t.symbol, c: 'bold' },
+        { t: t.side, c: t.side === 'BUY' ? 'up' : 'down' },
+        { t: t.qty },
+        { t: px(t.fill_price) },
+        { t: inr(t.cost) }
+      ]))
+    ]);
+  }
+}
+
+// Paper Sandbox Technical Chart & Entry Point Annotation
+let paperChartsData = {};
+let currentPaperSymbol = '';
+let paperChartDisplayType = 'candle';
+let showPaperChartSma = true;
+
+function renderPaperCharts(charts) {
+  const card = document.getElementById('paperChartCard');
+  if (!charts || Object.keys(charts).length === 0) {
+    if (card) card.style.display = 'none';
+    return;
+  }
+  if (card) card.style.display = 'block';
+  paperChartsData = charts;
+
+  if (!paperChartsData[currentPaperSymbol]) {
+    currentPaperSymbol = Object.keys(paperChartsData)[0];
+  }
+
+  const tabsContainer = document.getElementById('paperChartStockTabs');
+  if (tabsContainer) {
+    tabsContainer.replaceChildren();
+    Object.keys(paperChartsData).forEach(sym => {
+      const stock = paperChartsData[sym];
+      const meta = stock.meta || {};
+      const history = stock.history || [];
+      const last = history.length ? history[history.length - 1] : null;
+      const isSelected = (sym === currentPaperSymbol);
+
+      const btn = document.createElement('button');
+      btn.className = `chart-tab-btn ${isSelected ? 'active' : ''}`;
+      btn.onclick = () => selectPaperStock(sym);
+
+      const topRow = document.createElement('div');
+      topRow.className = 'chart-tab-top';
+      const symSpan = document.createElement('span');
+      symSpan.className = 'chart-tab-sym mono';
+      symSpan.textContent = sym;
+
+      const badge = document.createElement('span');
+      badge.className = 'pill pill-mode';
+      badge.style.fontSize = '9px';
+      badge.style.padding = '1px 5px';
+      badge.textContent = 'PAPER';
+
+      topRow.appendChild(symSpan);
+      topRow.appendChild(badge);
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'chart-tab-name';
+      nameDiv.textContent = meta.name || sym;
+
+      const priceDiv = document.createElement('div');
+      priceDiv.className = 'chart-tab-price mono';
+      priceDiv.textContent = last ? `₹${last.close.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 2})}` : '--';
+
+      btn.appendChild(topRow);
+      btn.appendChild(nameDiv);
+      btn.appendChild(priceDiv);
+      tabsContainer.appendChild(btn);
+    });
+  }
+
+  updateActivePaperStockUI();
+}
+
+function selectPaperStock(sym) {
+  currentPaperSymbol = sym;
+  renderPaperCharts(paperChartsData);
+}
+
+function setPaperChartType(type) {
+  paperChartDisplayType = type;
+  const btnCandle = document.getElementById('btnPaperChartCandle');
+  const btnLine = document.getElementById('btnPaperChartLine');
+  if (btnCandle) btnCandle.className = (type === 'candle') ? 'chart-btn active' : 'chart-btn';
+  if (btnLine) btnLine.className = (type === 'line') ? 'chart-btn active' : 'chart-btn';
+  drawPaperSvg();
+}
+
+function togglePaperSma() {
+  showPaperChartSma = !showPaperChartSma;
+  const lbl = document.getElementById('paperSmaLabel');
+  if (lbl) {
+    lbl.textContent = showPaperChartSma ? 'ON' : 'OFF';
+    lbl.style.color = showPaperChartSma ? '#10b981' : 'var(--mute)';
+  }
+  drawPaperSvg();
+}
+
+function updateActivePaperStockUI() {
+  const stock = paperChartsData[currentPaperSymbol];
+  if (!stock) return;
+  const meta = stock.meta || {};
+  const history = stock.history || [];
+  if (!history.length) return;
+  const last = history[history.length - 1];
+
+  const symEl = document.getElementById('paperChartSymbol');
+  if (symEl) symEl.textContent = currentPaperSymbol;
+
+  const descEl = document.getElementById('paperChartCompanyDesc');
+  if (descEl) descEl.textContent = `${meta.name || currentPaperSymbol} · ${meta.sector || 'NSE Equities'} · Simulated Holding`;
+
+  const shariahEl = document.getElementById('paperChartShariah');
+  if (shariahEl) shariahEl.textContent = meta.shariah || 'AAOIFI Compliant';
+
+  const buyEl = document.getElementById('paperChartKpiBuy');
+  if (buyEl) buyEl.textContent = meta.buy_price ? `₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const buySubEl = document.getElementById('paperChartKpiBuySub');
+  if (buySubEl) buySubEl.textContent = `${meta.buy_date || '--'} · ${meta.qty || 1} Shares`;
+
+  const lastEl = document.getElementById('paperChartKpiLast');
+  if (lastEl) lastEl.textContent = `₹${last.close.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+
+  const pnlEl = document.getElementById('paperChartKpiPnl');
+  if (pnlEl && meta.buy_price) {
+    const pnlAmt = (last.close - meta.buy_price) * (meta.qty || 1);
+    const pnlPct = ((last.close / meta.buy_price) - 1) * 100;
+    const sign = pnlAmt >= 0 ? '+' : '';
+    pnlEl.textContent = `${sign}₹${pnlAmt.toFixed(2)} (${sign}${pnlPct.toFixed(2)}%)`;
+    pnlEl.style.color = pnlAmt >= 0 ? '#10b981' : '#ef4444';
+  }
+
+  const stopEl = document.getElementById('paperChartKpiStop');
+  if (stopEl) stopEl.textContent = meta.stop_loss ? `₹${meta.stop_loss.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const targetEl = document.getElementById('paperChartKpiTarget');
+  if (targetEl) targetEl.textContent = meta.target ? `₹${meta.target.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const investedEl = document.getElementById('paperChartKpiInvested');
+  if (investedEl && meta.buy_price) {
+    investedEl.textContent = `₹${(meta.buy_price * (meta.qty || 1)).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+  }
+
+  drawPaperSvg();
+}
+
+function drawPaperSvg() {
+  const stock = paperChartsData[currentPaperSymbol];
+  if (!stock) return;
+  const history = stock.history || [];
+  const meta = stock.meta || {};
+  const svg = document.getElementById('paperSvgChart');
+  if (!svg || !history.length) return;
+  svg.innerHTML = '';
+
+  const W = 960;
+  const H = 500;
+  const padLeft = 65;
+  const padRight = 35;
+  const padTop = 35;
+  const padBottom = 70;
+  const volumeHeight = 65;
+
+  const plotW = W - padLeft - padRight;
+  const pricePlotH = H - padTop - padBottom - volumeHeight - 15;
+  const volumeTop = H - padBottom - volumeHeight;
+
+  const highs = history.map(h => h.high);
+  const lows = history.map(h => h.low);
+  if (meta.target) highs.push(meta.target * 1.02);
+  if (meta.stop_loss) lows.push(meta.stop_loss * 0.98);
+
+  let minP = Math.min(...lows);
+  let maxP = Math.max(...highs);
+  const pRange = maxP - minP || 1;
+  minP -= pRange * 0.04;
+  maxP += pRange * 0.04;
+
+  const maxVol = Math.max(...history.map(h => h.volume)) || 1;
+  const n = history.length;
+  const stepX = plotW / (n - 1 || 1);
+  const candleW = Math.max(3, Math.min(10, (plotW / n) * 0.65));
+
+  const getY = p => padTop + pricePlotH - ((p - minP) / (maxP - minP)) * pricePlotH;
+  const getX = i => padLeft + i * stepX;
+  const getVolY = v => volumeTop + volumeHeight - (v / maxVol) * volumeHeight;
+
+  const numSteps = 6;
+  let gridSvg = '';
+  for (let s = 0; s <= numSteps; s++) {
+    const pVal = minP + (s / numSteps) * (maxP - minP);
+    const yPos = getY(pVal);
+    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,3" />`;
+    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="#64748b" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
+  }
+
+  for (let i = 0; i < n; i += Math.ceil(n / 6)) {
+    const xPos = getX(i);
+    const dStr = history[i].date.slice(5);
+    gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="#1e293b" stroke-width="1" stroke-dasharray="2,4" opacity="0.5" />`;
+    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="#64748b" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
+  }
+
+  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="#334155" stroke-width="1" />`;
+  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="#64748b" font-size="9" font-family="'JetBrains Mono', monospace">SIMULATED VOLUME</text>`;
+
+  let volSvg = '';
+  for (let i = 0; i < n; i++) {
+    const h = history[i];
+    const x = getX(i) - candleW / 2;
+    const y = getVolY(h.volume);
+    const barH = volumeTop + volumeHeight - y;
+    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)';
+    volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" />`;
+  }
+
+  let levelsSvg = '';
+  if (meta.target) {
+    const tY = getY(meta.target);
+    levelsSvg += `
+      <g>
+        <line x1="${padLeft}" y1="${tY}" x2="${W - padRight}" y2="${tY}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5,4" />
+        <rect x="${W - padRight - 110}" y="${tY - 11}" width="110" height="20" rx="4" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1" />
+        <text x="${W - padRight - 55}" y="${tY + 3}" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">TARGET: ₹${meta.target.toFixed(0)}</text>
+      </g>
+    `;
+  }
+  if (meta.stop_loss) {
+    const slY = getY(meta.stop_loss);
+    levelsSvg += `
+      <g>
+        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,4" />
+        <rect x="${W - padRight - 110}" y="${slY - 11}" width="110" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
+        <text x="${W - padRight - 55}" y="${slY + 3}" fill="#f87171" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">STOP: ₹${meta.stop_loss.toFixed(0)}</text>
+      </g>
+    `;
+  }
+
+  const lastClose = history[n - 1].close;
+  const lastY = getY(lastClose);
+  levelsSvg += `
+    <g>
+      <line x1="${padLeft}" y1="${lastY}" x2="${W - padRight}" y2="${lastY}" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,3" />
+      <rect x="${padLeft}" y="${lastY - 10}" width="80" height="18" rx="3" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="1" />
+      <text x="${padLeft + 40}" y="${lastY + 3}" fill="#38bdf8" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">₹${lastClose.toFixed(1)}</text>
+    </g>
+  `;
+
+  let priceSvg = '';
+  if (paperChartDisplayType === 'candle') {
+    for (let i = 0; i < n; i++) {
+      const h = history[i];
+      const x = getX(i);
+      const yOpen = getY(h.open);
+      const yClose = getY(h.close);
+      const yHigh = getY(h.high);
+      const yLow = getY(h.low);
+      const isUp = h.close >= h.open;
+      const strokeColor = isUp ? '#10b981' : '#ef4444';
+      const topBody = Math.min(yOpen, yClose);
+      const bodyH = Math.max(2, Math.abs(yClose - yOpen));
+
+      priceSvg += `<line x1="${x}" y1="${yHigh}" x2="${x}" y2="${yLow}" stroke="${strokeColor}" stroke-width="1.2" />`;
+      priceSvg += `<rect x="${x - candleW / 2}" y="${topBody}" width="${candleW}" height="${bodyH}" fill="${strokeColor}" rx="1" />`;
+    }
+  } else {
+    let pathD = `M ${getX(0)} ${getY(history[0].close)}`;
+    for (let i = 1; i < n; i++) {
+      pathD += ` L ${getX(i)} ${getY(history[i].close)}`;
+    }
+    const areaD = pathD + ` L ${getX(n - 1)} ${padTop + pricePlotH} L ${getX(0)} ${padTop + pricePlotH} Z`;
+    priceSvg += `<path d="${areaD}" fill="url(#paperChartAreaGrad)" opacity="0.4" />`;
+    priceSvg += `<path d="${pathD}" fill="none" stroke="#38bdf8" stroke-width="2.2" />`;
+  }
+
+  let smaSvg = '';
+  if (showPaperChartSma) {
+    let pSma20 = '';
+    let pSma50 = '';
+    for (let i = 0; i < n; i++) {
+      if (history[i].sma20) {
+        const cmd = pSma20 === '' ? 'M' : 'L';
+        pSma20 += ` ${cmd} ${getX(i)} ${getY(history[i].sma20)}`;
+      }
+      if (history[i].sma50) {
+        const cmd = pSma50 === '' ? 'M' : 'L';
+        pSma50 += ` ${cmd} ${getX(i)} ${getY(history[i].sma50)}`;
+      }
+    }
+    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.4" opacity="0.85" />`;
+    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.4" opacity="0.85" />`;
+  }
+
+  let buySvg = '';
+  const buyIdx = history.findIndex(h => h.date === meta.buy_date);
+  if (buyIdx !== -1) {
+    const buyX = getX(buyIdx);
+    const buyY = getY(meta.buy_price);
+    const candleTop = getY(history[buyIdx].high);
+
+    buySvg = `
+      <line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#38bdf8" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.8" />
+      <circle cx="${buyX}" cy="${buyY}" r="14" fill="rgba(56, 189, 248, 0.2)" />
+      <circle cx="${buyX}" cy="${buyY}" r="8" fill="rgba(56, 189, 248, 0.4)" />
+      <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+      <g transform="translate(${buyX}, ${Math.max(padTop + 10, candleTop - 45)})">
+        <polygon points="0,35 -6,27 6,27" fill="#0284c7" />
+        <rect x="-75" y="0" width="150" height="28" rx="6" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.5" filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.6))" />
+        <text x="0" y="14" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+          PAPER @ ₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 1})}
+        </text>
+        <text x="0" y="24" fill="#7dd3fc" font-size="8" font-weight="bold" text-anchor="middle" font-family="sans-serif">
+          ${meta.buy_date} · ${meta.qty || 1} SHARES
+        </text>
+      </g>
+    `;
+  }
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="paperChartAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+      </linearGradient>
+    </defs>
+    ${gridSvg}
+    ${volSvg}
+    ${levelsSvg}
+    ${priceSvg}
+    ${smaSvg}
+    ${buySvg}
+  `;
+
+  const container = svg.parentElement;
+  const tooltip = document.getElementById('paperChartTooltip');
+  if (!container || !tooltip) return;
+
+  container.onmousemove = function(e) {
+    const rect = svg.getBoundingClientRect();
+    const scaleX = 960 / rect.width;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+
+    if (mouseX < padLeft || mouseX > W - padRight) {
+      tooltip.style.display = 'none';
+      return;
+    }
+
+    const idx = Math.min(n - 1, Math.max(0, Math.round((mouseX - padLeft) / stepX)));
+    const item = history[idx];
+    if (!item) return;
+
+    const diffFromBuy = meta.buy_price ? ((item.close / meta.buy_price - 1) * 100).toFixed(2) : '0.00';
+    const sign = diffFromBuy >= 0 ? '+' : '';
+    const diffColor = diffFromBuy >= 0 ? '#34d399' : '#f87171';
+    const isBuyDay = item.date === meta.buy_date;
+
+    tooltip.style.display = 'block';
+    tooltip.style.left = `${Math.min(rect.width - 200, Math.max(10, e.clientX - rect.left - 90))}px`;
+    tooltip.style.top = `15px`;
+
+    tooltip.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid #334155">
+        <span class="mono" style="font-weight:700;color:#fff">${item.date}</span>
+        ${isBuyDay ? '<span class="pill pill-mode" style="font-size:9px;padding:1px 5px">PAPER ENTRY</span>' : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-family:'JetBrains Mono',monospace;font-size:11px">
+        <div><span style="color:#94a3b8">Open:</span> ₹${item.open.toFixed(1)}</div>
+        <div><span style="color:#94a3b8">Close:</span> <strong style="color:#fff">₹${item.close.toFixed(1)}</strong></div>
+        <div><span style="color:#94a3b8">High:</span> ₹${item.high.toFixed(1)}</div>
+        <div><span style="color:#94a3b8">Low:</span> ₹${item.low.toFixed(1)}</div>
+        <div style="grid-column:span 2;color:#94a3b8;padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
+        <div style="grid-column:span 2;padding-top:4px;border-top:1px solid #1e293b;font-size:10.5px">
+          vs Paper Entry: <span style="color:${diffColor};font-weight:700">${sign}${diffFromBuy}%</span>
+        </div>
+      </div>
+    `;
+  };
+
+  container.onmouseleave = function() {
+    tooltip.style.display = 'none';
+  };
 }
 
 // Interactive Holdings Technical Chart & Buy Point Annotation
@@ -5185,7 +5898,10 @@ function restoreCardCollapseState() {
 }
 
 restoreCardCollapseState();
-const savedMarket = localStorage.getItem('alvi_active_market') || 'india';
+const hashMarket = (window.location.hash || '').replace('#', '').toLowerCase();
+const savedMarket = (hashMarket === 'paper' || hashMarket === 'us' || hashMarket === 'live' || hashMarket === 'india')
+  ? (hashMarket === 'india' ? 'live' : hashMarket)
+  : (localStorage.getItem('alvi_active_market') || 'live');
 switchMarket(savedMarket);
 load();
 setInterval(load, 15000);

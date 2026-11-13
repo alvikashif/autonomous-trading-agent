@@ -288,3 +288,34 @@ def test_build_summary_includes_holdings_charts(tmp_path):
     assert len(shyam["history"]) > 30
 
 
+def test_build_summary_paper_sandbox_isolation(tmp_path):
+    paper = tmp_path / "paper.json"
+    paper.write_text(json.dumps({
+        "cash": 10896.86,
+        "positions": {"SHYAMMETL": 3},
+        "deposits": [{"amount": 15000.0, "date": "2026-11-12"}]
+    }))
+    mon = tmp_path / "mon.json"
+    mon.write_text(json.dumps({"live_mode": True, "quotes": {"SHYAMMETL": 1315.0}}))
+    screen = tmp_path / "screen.csv"
+    screen.write_text("symbol,compliant\n")
+    prices = tmp_path / "prices.csv"
+    prices.write_text("date\n")
+
+    summary = build_summary(str(paper), str(mon), str(screen), str(prices), 3, broker_mode="live")
+    assert "paper_sandbox" in summary
+    ps = summary["paper_sandbox"]
+    assert "equity" in ps
+    assert "cash" in ps
+    assert "holdings" in ps
+    assert "charts" in ps
+    # Verify paper positions exclude live real money holding SHYAMMETL
+    paper_symbols = [h["symbol"] for h in ps["holdings"]]
+    assert "SHYAMMETL" not in paper_symbols
+    assert "ADANIPOWER" in paper_symbols or len(paper_symbols) > 0
+    # In live mode top-level charts, only live holding SHYAMMETL is present
+    assert "SHYAMMETL" in summary["charts"]
+    assert "ADANIPOWER" not in summary["charts"]
+
+
+
