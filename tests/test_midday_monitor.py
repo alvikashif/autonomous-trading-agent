@@ -270,3 +270,56 @@ def test_midday_groww_gtt_floor_stop_executed_detection_and_notification(tmp_pat
     notifs = json.loads(notif_file.read_text())
     assert any("GROWW GTT FLOOR STOP-LOSS EXECUTED" in n["title"] for n in notifs)
 
+
+def test_midday_groww_gtt_active_prevents_false_exit_trigger(tmp_path):
+    """When Groww Demat holding temporarily shows 0 but GTT is still ACTIVE, monitor must NOT falsely record exit or trigger sell."""
+    paper_path = tmp_path / "paper.json"
+    paper_path.write_text(json.dumps({"cash": 10000.0, "positions": {"ACUTAAS": 1}}))
+    status_path = tmp_path / "mon.json"
+    kill_switch_path = tmp_path / "kill.json"
+
+    ai_sig_path = tmp_path / "ai_sig.json"
+    ai_sig_path.write_text(json.dumps({
+        "verdict": "EXECUTE",
+        "selected_trade": {
+            "symbol": "ACUTAAS",
+            "entry_price": 4029.90,
+            "target_price": 4500.0,
+            "stop_loss": 3869.38,
+            "hard_stop_price": 3748.45,
+            "gtt_trigger_price": 3748.45,
+            "gtt_order_id": "GTT_ACTIVE_1234",
+            "qty": 1,
+        }
+    }))
+
+    mock_broker = MagicMock()
+    mock_broker.positions.return_value = {}  # Suppose holdings temporarily empty
+    # But GTT order is STILL ACTIVE on Groww!
+    mock_broker.get_gtt_orders.return_value = [{"smart_order_id": "GTT_ACTIVE_1234", "status": "ACTIVE"}]
+
+    now = datetime(2026, 11, 13, 14, 46, tzinfo=IST)
+    quotes = lambda syms: ({"ACUTAAS": 4030.0}, {"ACUTAAS": 4029.90})
+
+    st = run_once(
+        paper_path=str(paper_path),
+        status_path=str(status_path),
+        cost_cfg=CostConfig(),
+        stop_pct=0.0,
+        alert_pct=0.0,
+        daily_loss_limit_pct=0.5,
+        act=True,
+        now=now,
+        quote_fn=quotes,
+        ai_signals_path=str(ai_sig_path),
+        broker=mock_broker,
+        live_mode=True,
+        kill_switch_path=str(kill_switch_path),
+    )
+
+    # Must NOT record false exit
+    saved_sig = json.loads(ai_sig_path.read_text())
+    assert "exit" not in saved_sig["selected_trade"]
+    assert mock_broker.place_order.call_count == 0
+
+

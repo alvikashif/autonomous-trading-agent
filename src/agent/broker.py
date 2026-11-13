@@ -193,7 +193,8 @@ class GrowwBroker(Broker):
         return 0.0
 
     def positions(self) -> dict[str, int]:
-        """Fetch current equity holdings quantity from Demat account."""
+        """Fetch current equity holdings quantity from Demat account (settled holdings + today's day delivery positions)."""
+        # 1. Settled Demat holdings (T+1)
         resp = self._execute_with_retry(self._ensure_client().get_holdings_for_user)
         holdings = []
         if isinstance(resp, dict):
@@ -207,6 +208,24 @@ class GrowwBroker(Broker):
             qty = int(float(h.get("quantity") or h.get("total_quantity") or h.get("totalQuantity") or h.get("holding_quantity") or 0))
             if sym and qty > 0:
                 pos[sym.upper()] = qty
+
+        # 2. Today's day delivery positions (T+0 CNC buys not yet settled into Demat)
+        try:
+            pos_resp = self._execute_with_retry(self._ensure_client().get_positions_for_user, segment="CASH")
+            day_positions = []
+            if isinstance(pos_resp, dict):
+                if "positions" in pos_resp and isinstance(pos_resp["positions"], list):
+                    day_positions = pos_resp["positions"]
+                elif "payload" in pos_resp and isinstance(pos_resp["payload"], dict):
+                    day_positions = pos_resp["payload"].get("positions", [])
+            for p in day_positions:
+                sym = p.get("trading_symbol") or p.get("tradingSymbol") or p.get("symbol") or ""
+                qty = int(float(p.get("quantity") or p.get("net_quantity") or (float(p.get("credit_quantity", 0)) - float(p.get("debit_quantity", 0)))))
+                if sym and qty > 0:
+                    pos[sym.upper()] = pos.get(sym.upper(), 0) + qty
+        except Exception as pe:
+            logger.debug(f"Could not fetch day positions: {pe}")
+
         return pos
 
     def place_order(self, order: Order) -> dict:

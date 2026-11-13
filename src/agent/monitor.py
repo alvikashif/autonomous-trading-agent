@@ -162,16 +162,32 @@ def run_once(
                 logger.debug(f"Could not fetch broker positions: {pe}")
 
         # Check if Groww executed the 7% Floor Stop-Loss on exchange
-        if live_mode and broker and groww_position_checked and ai_qty == 0:
-            if selected and not selected.get("exit"):
-                hard_stop_px = float(selected.get("gtt_trigger_price") or selected.get("hard_stop_price") or (entry_px_val * (1.0 - hard_stop_pct)))
+        gtt_still_active = False
+        gtt_id = selected.get("gtt_order_id") if selected else None
+        hard_stop_px = float(selected.get("gtt_trigger_price") or selected.get("hard_stop_price") or (entry_px_val * (1.0 - hard_stop_pct))) if selected else 0.0
+
+        if live_mode and broker and groww_position_checked and ai_qty == 0 and selected and not selected.get("exit"):
+            # Check if GTT order is still active on Groww. If it is still active, it has NOT executed.
+            if gtt_id and hasattr(broker, "get_gtt_orders"):
+                try:
+                    active_gtts = broker.get_gtt_orders(status="ACTIVE")
+                    if isinstance(active_gtts, list):
+                        for g in active_gtts:
+                            if str(g.get("smart_order_id", "")) == str(gtt_id) or str(g.get("order_id", "")) == str(gtt_id):
+                                gtt_still_active = True
+                                break
+                except Exception as ge:
+                    logger.debug(f"Could not verify active GTT orders: {ge}")
+
+            if not gtt_still_active:
+                actual_qty = int(selected.get("qty") or 1)
                 logger.info(f"Groww holding for {ai_symbol} is 0. GTT 7% floor stop-loss executed on exchange @ Rs {hard_stop_px:.2f}.")
 
                 selected["exit"] = {
                     "type": "GROWW_GTT_STOP_LOSS",
                     "price": hard_stop_px,
                     "timestamp": now.isoformat(timespec="seconds"),
-                    "qty": selected.get("qty", 3),
+                    "qty": actual_qty,
                     "pnl_pct": (hard_stop_px / entry_px_val - 1) if entry_px_val else -hard_stop_pct,
                     "ai_reason": "Executed by Groww GTT 7% floor stop-loss on exchange. Capital preserved.",
                 }
@@ -186,7 +202,7 @@ def run_once(
                         "ts": now.isoformat(timespec="seconds").replace("T", " ")[:19],
                         "symbol": ai_symbol,
                         "side": "SELL",
-                        "qty": selected.get("qty", 3),
+                        "qty": actual_qty,
                         "fill_price": hard_stop_px,
                         "cost": 0.0,
                         "reason": "GROWW_GTT_FLOOR_STOP",
@@ -215,7 +231,7 @@ def run_once(
                         message=(
                             f"Groww has automatically executed the 7% emergency floor stop-loss on the exchange.\n"
                             f"• Stock: {ai_symbol}\n"
-                            f"• Quantity Sold: {selected.get('qty', 3)} shares\n"
+                            f"• Quantity Sold: {actual_qty} shares\n"
                             f"• Trigger Price: Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.1f}% Floor)\n"
                             f"• Status: FILLED on Groww Demat\n"
                             f"• AI Conflict Resolution: Zero conflict. Exit confirmed and registered."
@@ -223,7 +239,7 @@ def run_once(
                         details={
                             "symbol": ai_symbol,
                             "action": "GROWW_GTT_STOP_SOLD",
-                            "qty": selected.get("qty", 3),
+                            "qty": actual_qty,
                             "price": hard_stop_px,
                             "pnl_pct": (hard_stop_px / entry_px_val - 1) if entry_px_val else -hard_stop_pct,
                         },

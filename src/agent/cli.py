@@ -592,7 +592,9 @@ def cmd_ai_scan(args, cfg) -> None:
 
 
 def cmd_ai_trade(args, cfg) -> None:
-    from .ai_brain import compute_order_size, load_ai_signals
+    import json
+    from datetime import datetime
+    from .ai_brain import compute_order_size, load_ai_signals, save_ai_signals
     from .broker import GrowwBroker
     from .kill_switch import is_kill_switch_active
     from .models import Order, Side
