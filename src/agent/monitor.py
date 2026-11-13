@@ -151,26 +151,101 @@ def run_once(
             _save(ai_signals_path, ai_sig)
 
         # Resolve quantity from live broker with fallback to paper_state / live_trades
+        groww_position_checked = False
         if live_mode and broker and hasattr(broker, "positions"):
             try:
                 live_pos = broker.positions()
-                ai_qty = live_pos.get(ai_symbol, 0)
+                if isinstance(live_pos, dict):
+                    groww_position_checked = True
+                    ai_qty = int(live_pos.get(ai_symbol, 0))
             except Exception as pe:
                 logger.debug(f"Could not fetch broker positions: {pe}")
-        if ai_qty <= 0:
+
+        # Check if Groww executed the 7% Floor Stop-Loss on exchange
+        if live_mode and broker and groww_position_checked and ai_qty == 0:
+            if selected and not selected.get("exit"):
+                hard_stop_px = float(selected.get("gtt_trigger_price") or selected.get("hard_stop_price") or (entry_px_val * (1.0 - hard_stop_pct)))
+                logger.info(f"Groww holding for {ai_symbol} is 0. GTT 7% floor stop-loss executed on exchange @ Rs {hard_stop_px:.2f}.")
+
+                selected["exit"] = {
+                    "type": "GROWW_GTT_STOP_LOSS",
+                    "price": hard_stop_px,
+                    "timestamp": now.isoformat(timespec="seconds"),
+                    "qty": selected.get("qty", 3),
+                    "pnl_pct": (hard_stop_px / entry_px_val - 1) if entry_px_val else -hard_stop_pct,
+                    "ai_reason": "Executed by Groww GTT 7% floor stop-loss on exchange. Capital preserved.",
+                }
+                ai_sig["selected_trade"] = selected
+                _save(ai_signals_path, ai_sig)
+
+                # Record in live trades
+                try:
+                    lt_file = Path("data/live_trades.json")
+                    lt_trades = json.loads(lt_file.read_text(encoding="utf-8")) if lt_file.is_file() else []
+                    lt_trades.append({
+                        "ts": now.isoformat(timespec="seconds").replace("T", " ")[:19],
+                        "symbol": ai_symbol,
+                        "side": "SELL",
+                        "qty": selected.get("qty", 3),
+                        "fill_price": hard_stop_px,
+                        "cost": 0.0,
+                        "reason": "GROWW_GTT_FLOOR_STOP",
+                    })
+                    lt_file.write_text(json.dumps(lt_trades, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
+
+                # Update paper/live positions
+                if ai_symbol in positions:
+                    positions.pop(ai_symbol, None)
+                    paper_broker.save()
+
+                alerts.append({
+                    "ts": now.isoformat(timespec="seconds"),
+                    "kind": "GROWW_GTT_STOP_SOLD",
+                    "symbol": ai_symbol,
+                    "detail": f"🚨 Groww GTT Floor Stop Executed: {ai_symbol} sold on exchange @ floor trigger Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.1f}% floor).",
+                })
+
+                try:
+                    from .notify import dispatch_notification
+                    dispatch_notification(
+                        event_type="stop_loss",
+                        title=f"🚨 GROWW GTT FLOOR STOP-LOSS EXECUTED: {ai_symbol}",
+                        message=(
+                            f"Groww has automatically executed the 7% emergency floor stop-loss on the exchange.\n"
+                            f"• Stock: {ai_symbol}\n"
+                            f"• Quantity Sold: {selected.get('qty', 3)} shares\n"
+                            f"• Trigger Price: Rs {hard_stop_px:.2f} (-{hard_stop_pct*100:.1f}% Floor)\n"
+                            f"• Status: FILLED on Groww Demat\n"
+                            f"• AI Conflict Resolution: Zero conflict. Exit confirmed and registered."
+                        ),
+                        details={
+                            "symbol": ai_symbol,
+                            "action": "GROWW_GTT_STOP_SOLD",
+                            "qty": selected.get("qty", 3),
+                            "price": hard_stop_px,
+                            "pnl_pct": (hard_stop_px / entry_px_val - 1) if entry_px_val else -hard_stop_pct,
+                        },
+                        path=status_file.parent / "notifications.json",
+                    )
+                except Exception as ne:
+                    logger.debug(f"Notification error: {ne}")
+
+        if not groww_position_checked and ai_qty <= 0:
             ai_qty = int(positions.get(ai_symbol, selected.get("qty", 0)))
-        if ai_qty <= 0:
-            try:
-                lt_file = Path("data/live_trades.json")
-                if lt_file.is_file():
-                    lt_data = json.loads(lt_file.read_text(encoding="utf-8"))
-                    for t in lt_data:
-                        if t.get("symbol") == ai_symbol and t.get("side") == "BUY":
-                            ai_qty += int(t.get("qty", 0))
-            except Exception:
-                pass
-        if ai_qty <= 0:
-            ai_qty = 3  # Safe minimum fallback for active held position
+            if ai_qty <= 0:
+                try:
+                    lt_file = Path("data/live_trades.json")
+                    if lt_file.is_file():
+                        lt_data = json.loads(lt_file.read_text(encoding="utf-8"))
+                        for t in lt_data:
+                            if t.get("symbol") == ai_symbol and t.get("side") == "BUY":
+                                ai_qty += int(t.get("qty", 0))
+                except Exception:
+                    pass
+            if ai_qty <= 0:
+                ai_qty = 3  # Safe minimum fallback for active held position
 
         # Ensure Emergency Hard Stop GTT is active on Groww exchange book whenever a live position is held
         if live_mode and broker and ai_qty > 0 and not selected.get("gtt_order_id"):
@@ -351,46 +426,87 @@ def run_once(
                         alerts.append({"ts": stamp, "kind": "KILL_SWITCH_BLOCKED", "symbol": ai_symbol,
                                        "detail": "Stop loss sell blocked by active Kill Switch."})
                     else:
-                        active_broker = broker if (live_mode and broker) else paper_broker
-                        sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
-                        active_broker.place_order(sell_order)
-
-                        # Cancel emergency GTT order if active
-                        if live_mode and broker and hasattr(broker, "cancel_gtt_order") and selected.get("gtt_order_id"):
+                        order_already_filled = False
+                        if live_mode and broker and hasattr(broker, "positions"):
                             try:
-                                broker.cancel_gtt_order(selected["gtt_order_id"])
-                                selected["gtt_order_status"] = "CANCELLED_FOR_EXIT"
-                            except Exception as ge:
-                                logger.debug(f"GTT cancel error: {ge}")
+                                live_verify = broker.positions()
+                                if isinstance(live_verify, dict) and live_verify.get(ai_symbol, 0) <= 0:
+                                    logger.info(f"Groww position for {ai_symbol} is already 0. GTT floor stop executed during evaluation. No duplicate order placed.")
+                                    order_already_filled = True
+                            except Exception as cke:
+                                logger.debug(f"Live verify error: {cke}")
 
-                        exit_reason = eval_payload.get("reason") if eval_payload else "Breached stop-loss floor."
-                        selected["exit"] = {
-                            "type": "STOP_LOSS",
-                            "price": cur_px,
-                            "timestamp": stamp,
-                            "qty": ai_qty,
-                            "pnl_pct": (cur_px / entry_px - 1),
-                            "ai_reason": exit_reason,
-                        }
-                        ai_sig["selected_trade"] = selected
-                        _save(ai_signals_path, ai_sig)
-                        alerts.append({
-                            "ts": stamp,
-                            "kind": "AI_STOP_EXECUTED",
-                            "symbol": ai_symbol,
-                            "detail": f"Sold {ai_qty} shares @ Rs {cur_px:.2f} ({'LIVE' if live_mode else 'PAPER'})",
-                        })
-                        try:
-                            from .notify import dispatch_notification
-                            dispatch_notification(
-                                event_type="stop_loss",
-                                title=f"STOP LOSS EXECUTED: {ai_symbol}",
-                                message=f"Sold {ai_qty} shares @ Rs {cur_px:.2f} (Loss: {(cur_px/entry_px-1)*100:.1f}%) [{'LIVE' if live_mode else 'PAPER'}]. Reason: {exit_reason}",
-                                details={"symbol": ai_symbol, "qty": ai_qty, "price": cur_px, "pnl_pct": (cur_px/entry_px-1)},
-                                path=status_file.parent / "notifications.json",
-                            )
-                        except Exception as e:
-                            logger.debug(f"Notification error: {e}")
+                        if order_already_filled:
+                            hard_stop_px = float(selected.get("gtt_trigger_price") or selected.get("hard_stop_price") or (entry_px * 0.93))
+                            selected["exit"] = {
+                                "type": "GROWW_GTT_STOP_LOSS",
+                                "price": hard_stop_px,
+                                "timestamp": stamp,
+                                "qty": ai_qty,
+                                "pnl_pct": (hard_stop_px / entry_px - 1),
+                                "ai_reason": "Executed by Groww GTT floor stop-loss on exchange. Confirmed zero conflict.",
+                            }
+                            ai_sig["selected_trade"] = selected
+                            _save(ai_signals_path, ai_sig)
+                            alerts.append({
+                                "ts": stamp,
+                                "kind": "GROWW_GTT_STOP_SOLD",
+                                "symbol": ai_symbol,
+                                "detail": f"Groww GTT Floor Stop confirmed: {ai_symbol} sold on exchange @ Rs {hard_stop_px:.2f}.",
+                            })
+                            try:
+                                from .notify import dispatch_notification
+                                dispatch_notification(
+                                    event_type="stop_loss",
+                                    title=f"🚨 GROWW GTT FLOOR STOP-LOSS EXECUTED: {ai_symbol}",
+                                    message=f"Groww GTT floor stop executed @ Rs {hard_stop_px:.2f}. Dashboard confirmed zero conflict.",
+                                    details={"symbol": ai_symbol, "action": "GROWW_GTT_STOP_SOLD", "price": hard_stop_px},
+                                    path=status_file.parent / "notifications.json",
+                                )
+                            except Exception:
+                                pass
+                        else:
+                            active_broker = broker if (live_mode and broker) else paper_broker
+
+                            # Cancel emergency GTT order if active
+                            if live_mode and broker and hasattr(broker, "cancel_gtt_order") and selected.get("gtt_order_id"):
+                                try:
+                                    broker.cancel_gtt_order(selected["gtt_order_id"])
+                                    selected["gtt_order_status"] = "CANCELLED_FOR_EXIT"
+                                except Exception as ge:
+                                    logger.debug(f"GTT cancel error: {ge}")
+
+                            sell_order = Order(ai_symbol, Side.SELL, ai_qty, cur_px)
+                            active_broker.place_order(sell_order)
+
+                            exit_reason = eval_payload.get("reason") if eval_payload else "Breached stop-loss floor."
+                            selected["exit"] = {
+                                "type": "STOP_LOSS",
+                                "price": cur_px,
+                                "timestamp": stamp,
+                                "qty": ai_qty,
+                                "pnl_pct": (cur_px / entry_px - 1),
+                                "ai_reason": exit_reason,
+                            }
+                            ai_sig["selected_trade"] = selected
+                            _save(ai_signals_path, ai_sig)
+                            alerts.append({
+                                "ts": stamp,
+                                "kind": "AI_STOP_EXECUTED",
+                                "symbol": ai_symbol,
+                                "detail": f"Sold {ai_qty} shares @ Rs {cur_px:.2f} ({'LIVE' if live_mode else 'PAPER'})",
+                            })
+                            try:
+                                from .notify import dispatch_notification
+                                dispatch_notification(
+                                    event_type="stop_loss",
+                                    title=f"STOP LOSS EXECUTED: {ai_symbol}",
+                                    message=f"Sold {ai_qty} shares @ Rs {cur_px:.2f} (Loss: {(cur_px/entry_px-1)*100:.1f}%) [{'LIVE' if live_mode else 'PAPER'}]. Reason: {exit_reason}",
+                                    details={"symbol": ai_symbol, "qty": ai_qty, "price": cur_px, "pnl_pct": (cur_px/entry_px-1)},
+                                    path=status_file.parent / "notifications.json",
+                                )
+                            except Exception as e:
+                                logger.debug(f"Notification error: {e}")
 
             # 2. Mid-Day Profit Target Reached
             elif cur_px >= target_px:

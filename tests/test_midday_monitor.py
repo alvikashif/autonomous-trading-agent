@@ -209,3 +209,64 @@ def test_midday_take_profit_with_ai_exit(tmp_path):
     saved_sig = json.loads(ai_sig_path.read_text())
     assert saved_sig["selected_trade"]["exit"]["type"] == "TAKE_PROFIT"
     assert saved_sig["selected_trade"]["exit"]["price"] == 1410.0
+
+
+def test_midday_groww_gtt_floor_stop_executed_detection_and_notification(tmp_path):
+    """When Groww executes the GTT 7% floor stop loss on exchange, monitor detects 0 shares, marks exit, notifies, and prevents duplicate sell."""
+    paper_path = tmp_path / "paper.json"
+    paper_path.write_text(json.dumps({"cash": 10000.0, "positions": {"SHYAMMETL": 3}}))
+    status_path = tmp_path / "mon.json"
+    kill_switch_path = tmp_path / "kill.json"
+
+    ai_sig_path = tmp_path / "ai_sig.json"
+    ai_sig_path.write_text(json.dumps({
+        "verdict": "EXECUTE",
+        "selected_trade": {
+            "symbol": "SHYAMMETL",
+            "entry_price": 1320.50,
+            "target_price": 1584.60,
+            "stop_loss": 1267.68,
+            "hard_stop_price": 1228.05,
+            "gtt_trigger_price": 1228.05,
+            "gtt_order_id": "GTT_9999",
+            "qty": 3,
+        }
+    }))
+
+    # Groww Demat returns 0 shares because GTT floor stop loss executed
+    mock_broker = MagicMock()
+    mock_broker.positions.return_value = {}
+
+    now = datetime(2026, 11, 9, 12, 0, tzinfo=IST)
+    quotes = lambda syms: ({"SHYAMMETL": 1225.0}, {"SHYAMMETL": 1320.50})
+
+    st = run_once(
+        paper_path=str(paper_path),
+        status_path=str(status_path),
+        cost_cfg=CostConfig(),
+        stop_pct=0.0,
+        alert_pct=0.0,
+        daily_loss_limit_pct=0.5,
+        act=True,
+        now=now,
+        quote_fn=quotes,
+        ai_signals_path=str(ai_sig_path),
+        broker=mock_broker,
+        live_mode=True,
+        kill_switch_path=str(kill_switch_path),
+    )
+
+    # 1. Broker should NOT place any duplicate order (conflict prevented)
+    assert mock_broker.place_order.call_count == 0
+
+    # 2. Exit must be registered as GROWW_GTT_STOP_LOSS
+    saved_sig = json.loads(ai_sig_path.read_text())
+    assert saved_sig["selected_trade"]["exit"]["type"] == "GROWW_GTT_STOP_LOSS"
+    assert saved_sig["selected_trade"]["exit"]["price"] == 1228.05
+
+    # 3. Notification should be saved in notifications.json
+    notif_file = tmp_path / "notifications.json"
+    assert notif_file.is_file()
+    notifs = json.loads(notif_file.read_text())
+    assert any("GROWW GTT FLOOR STOP-LOSS EXECUTED" in n["title"] for n in notifs)
+

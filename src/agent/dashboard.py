@@ -1793,7 +1793,6 @@ label {
   color: #cbd5e1;
   line-height: 1.45;
 }
-
 </style>
 </head>
 <body>
@@ -3464,9 +3463,253 @@ footer {
   line-height: 1.45;
 }
 
+/* Theme Toggle Button */
+.btn-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f172a;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-theme-toggle:hover {
+  background: var(--card-hover);
+  border-color: var(--accent);
+}
+
+/* Light Theme Variables and Overrides */
+body.light-theme {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --card-border: #e2e8f0;
+  --card-hover: #f1f5f9;
+  --ink: #0f172a;
+  --mute: #64748b;
+  --subtle: #94a3b8;
+  --line: #e2e8f0;
+  --up: #059669;
+  --up-bg: rgba(5, 150, 105, 0.08);
+  --up-border: rgba(5, 150, 105, 0.25);
+  --down: #dc2626;
+  --down-bg: rgba(220, 38, 38, 0.08);
+  --down-border: rgba(220, 38, 38, 0.25);
+  --warn: #d97706;
+  --warn-bg: rgba(217, 119, 6, 0.08);
+  --warn-border: rgba(217, 119, 6, 0.25);
+  --accent: #0284c7;
+  --accent-glow: rgba(2, 132, 199, 0.15);
+  --shariah: #059669;
+  background: #f8fafc;
+  background-image: radial-gradient(ellipse at 50% -20%, #e2e8f0 0%, #f8fafc 70%);
+  color: #0f172a;
+}
+body.light-theme .topbar {
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+body.light-theme .brand-title {
+  color: #0f172a;
+}
+body.light-theme .brand-badge {
+  background: rgba(2, 132, 199, 0.1);
+  color: #0284c7;
+  border-color: rgba(2, 132, 199, 0.25);
+}
+body.light-theme .market-nav-bar {
+  background: rgba(241, 245, 249, 0.95);
+  border: 1px solid #cbd5e1;
+}
+body.light-theme .market-tab-btn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+body.light-theme .market-tab-btn.active {
+  background: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 3px 12px rgba(2, 132, 199, 0.14);
+}
+body.light-theme .market-title {
+  color: #0f172a;
+}
+body.light-theme .market-sub-text {
+  color: #64748b;
+}
+body.light-theme .card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+body.light-theme .card-header {
+  background: rgba(248, 250, 252, 0.9);
+  border-bottom: 1px solid #e2e8f0;
+}
+body.light-theme .card-title {
+  color: #0f172a;
+}
+body.light-theme .kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+body.light-theme .kpi-value {
+  color: #0f172a;
+}
+body.light-theme .kpi-label {
+  color: #64748b;
+}
+body.light-theme .kpi-sub {
+  color: #94a3b8;
+}
+body.light-theme table th {
+  background: #f1f5f9;
+  color: #475569;
+  border-bottom: 1px solid #cbd5e1;
+}
+body.light-theme table td {
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+body.light-theme tr:hover td {
+  background: #f8fafc;
+}
+body.light-theme .pill {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+body.light-theme .pill-live {
+  background: rgba(5, 150, 105, 0.1);
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.3);
+}
+body.light-theme .pill-mode {
+  background: rgba(2, 132, 199, 0.1);
+  color: #0284c7;
+  border-color: rgba(2, 132, 199, 0.3);
+}
+body.light-theme .pill-shariah {
+  background: rgba(5, 150, 105, 0.1);
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.3);
+}
+body.light-theme .btn-toggle-all,
+body.light-theme .btn-notif,
+body.light-theme .btn-header-install,
+body.light-theme .btn-theme-toggle {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+body.light-theme .btn-toggle-all:hover,
+body.light-theme .btn-notif:hover,
+body.light-theme .btn-header-install:hover,
+body.light-theme .btn-theme-toggle:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+body.light-theme .user-pill {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+body.light-theme .chart-metric-box {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+body.light-theme .chart-metric-val {
+  color: #0f172a;
+}
+body.light-theme .chart-metric-label {
+  color: #64748b;
+}
+body.light-theme .chart-tab-btn {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+body.light-theme .chart-tab-btn.active {
+  background: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.15);
+}
+body.light-theme .chart-tab-sym {
+  color: #0f172a;
+}
+body.light-theme .chart-tab-price {
+  color: #0f172a;
+}
+body.light-theme .chart-legend-bar {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+body.light-theme .chart-btn {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+body.light-theme .chart-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+body.light-theme .chart-btn-sma {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+body.light-theme .us-anchor-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+body.light-theme .us-kpi-box {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+body.light-theme .us-kpi-box .val {
+  color: #0f172a;
+}
+body.light-theme .step-item {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+body.light-theme .step-text {
+  color: #334155;
+}
+body.light-theme .shariah-audit-card {
+  background: rgba(5, 150, 105, 0.05);
+  border-color: rgba(5, 150, 105, 0.2);
+}
+body.light-theme .ratio-item {
+  color: #334155;
+}
+body.light-theme .ratio-item strong {
+  color: #0f172a;
+}
+body.light-theme .toast {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+body.light-theme .toast-title {
+  color: #0f172a;
+}
+body.light-theme .toast-body {
+  color: #334155;
+}
+
+
 </style>
 </head>
 <body>
+<script>(function(){try{if(localStorage.getItem('alvi_theme')==='light'){document.body.classList.add('light-theme');}}catch(e){}})();</script>
 
 <div id="toastContainer" class="toast-container"></div>
 <div id="pwaBanner" class="pwa-banner">
@@ -3517,6 +3760,10 @@ footer {
     </div>
 
     <div class="actions-group">
+      <button id="btnThemeToggle" class="btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme">
+        <span id="themeIcon">☀️</span>
+        <span id="themeText" class="title-desktop">Light</span>
+      </button>
       <button id="btnToggleAll" class="btn-toggle-all" onclick="toggleAllCards()" title="Collapse / Expand All Sections">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
         <span id="toggleAllText">Collapse All</span>
@@ -3733,14 +3980,19 @@ footer {
           <div id="chartKpiPnlSub" class="chart-metric-sub">Unrealized P/L</div>
         </div>
         <div class="chart-metric-box">
-          <div class="chart-metric-label">Floor Stop-Loss</div>
+          <div class="chart-metric-label">Floor Stop-Loss (-7%)</div>
           <div id="chartKpiStop" class="chart-metric-val mono" style="color:#ef4444">--</div>
-          <div id="chartKpiStopSub" class="chart-metric-sub" style="color:rgba(239,68,68,0.85);font-weight:600">--</div>
+          <div id="chartKpiStopSub" class="chart-metric-sub" style="color:#ef4444;font-weight:600">GROWW GTT FLOOR</div>
         </div>
         <div class="chart-metric-box">
-          <div class="chart-metric-label">Take-Profit Target</div>
-          <div id="chartKpiTarget" class="chart-metric-val mono" style="color:#10b981">--</div>
-          <div class="chart-metric-sub" style="color:rgba(16,185,129,0.85);font-weight:600">+20.0% Max Goal</div>
+          <div class="chart-metric-label">Dashboard AI Stop (-4%)</div>
+          <div id="chartKpiSoftStop" class="chart-metric-val mono" style="color:#f59e0b">--</div>
+          <div id="chartKpiSoftStopSub" class="chart-metric-sub" style="color:#f59e0b;font-weight:600">DYNAMIC AI EVALUATION</div>
+        </div>
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Strategy Objective</div>
+          <div id="chartKpiTarget" class="chart-metric-val mono" style="color:#10b981;font-size:15px">Ride Upward Trend</div>
+          <div id="chartKpiTargetSub" class="chart-metric-sub" style="color:#10b981;font-weight:600">NO MAX GOAL · RIDE MOMENTUM</div>
         </div>
         <div class="chart-metric-box">
           <div class="chart-metric-label">Invested Capital</div>
@@ -3753,9 +4005,9 @@ footer {
       <div class="chart-legend-bar">
         <div class="chart-legend-items">
           <span class="legend-item"><span class="legend-dot" style="background:#10b981;box-shadow:0 0 6px #10b981"></span> 🟢 Buy Point</span>
-          <span class="legend-item"><span class="legend-dash" style="border-top-color:#ef4444"></span> Stop-Loss (Floor)</span>
-          <span class="legend-item"><span class="legend-dash" style="border-top-color:#10b981"></span> Target (+20%)</span>
-          <span class="legend-item"><span class="legend-line" style="background:#fbbf24"></span> SMA 20</span>
+          <span class="legend-item"><span class="legend-dash" style="border-top-color:#ef4444"></span> Floor Stop (-7% GTT)</span>
+          <span class="legend-item"><span class="legend-dash" style="border-top-color:#f59e0b"></span> AI Soft Stop (-4%)</span>
+          <span class="legend-item"><span class="legend-line" style="background:#fbbf24"></span> SMA 20 (Trend Support)</span>
           <span class="legend-item"><span class="legend-line" style="background:#c084fc"></span> SMA 50</span>
         </div>
         <div class="chart-instruction-text">Hover or tap candles for detailed daily OHLCV breakdown</div>
@@ -3925,14 +4177,19 @@ footer {
             <div id="paperChartKpiPnlSub" class="chart-metric-sub">Unrealized P/L</div>
           </div>
           <div class="chart-metric-box">
-            <div class="chart-metric-label">Paper Stop-Loss</div>
+            <div class="chart-metric-label">Paper Floor Stop (-7%)</div>
             <div id="paperChartKpiStop" class="chart-metric-val mono" style="color:#ef4444">--</div>
-            <div class="chart-metric-sub" style="color:#ef4444">PAPER THRESHOLD (-7%)</div>
+            <div class="chart-metric-sub" style="color:#ef4444">SIMULATED FLOOR (-7%)</div>
           </div>
           <div class="chart-metric-box">
-            <div class="chart-metric-label">Paper Target</div>
-            <div id="paperChartKpiTarget" class="chart-metric-val mono" style="color:#10b981">--</div>
-            <div class="chart-metric-sub" style="color:#10b981">+20.0% Goal</div>
+            <div class="chart-metric-label">Paper Soft Stop (-4%)</div>
+            <div id="paperChartKpiSoftStop" class="chart-metric-val mono" style="color:#f59e0b">--</div>
+            <div class="chart-metric-sub" style="color:#f59e0b">AI EVALUATION LEVEL (-4%)</div>
+          </div>
+          <div class="chart-metric-box">
+            <div class="chart-metric-label">Strategy Objective</div>
+            <div id="paperChartKpiTarget" class="chart-metric-val mono" style="color:#10b981;font-size:15px">Ride Upward Trend</div>
+            <div id="paperChartKpiTargetSub" class="chart-metric-sub" style="color:#10b981">NO MAX GOAL · RIDE MOMENTUM</div>
           </div>
           <div class="chart-metric-box">
             <div class="chart-metric-label">Paper Allocation</div>
@@ -4682,7 +4939,7 @@ function renderAI(ai, budget) {
 
     mGrid.innerHTML = `
       <div class="metric-box"><div class="lbl">Entry Price</div><div class="val">${px(s.entry_price)}</div></div>
-      <div class="metric-box"><div class="lbl">Target (+${Math.round((s.target_pct || 0.20) * 100)}%)</div><div class="val up">${px(s.target_price)}</div></div>
+      <div class="metric-box"><div class="lbl">Strategy Goal</div><div class="val up" style="font-size:12.5px">Ride Upward Trend</div></div>
       <div class="metric-box"><div class="lbl">Soft Stop (-${Math.round((s.stop_pct || 0.04) * 100)}%)</div><div class="val down">${px(s.stop_loss)} (AI)</div></div>
       <div class="metric-box"><div class="lbl">Hard Floor (-${floorPct}%)</div><div class="val" style="color:#f87171">${px(floorPrice)} (Floor)</div></div>
     `;
@@ -5189,11 +5446,19 @@ function updateActivePaperStockUI() {
     pnlEl.style.color = pnlAmt >= 0 ? '#10b981' : '#ef4444';
   }
 
+  const floorStop = meta.stop_loss || (meta.buy_price ? +(meta.buy_price * 0.93).toFixed(2) : null);
+  const softStop = meta.soft_stop || (meta.buy_price ? +(meta.buy_price * 0.96).toFixed(2) : null);
+
   const stopEl = document.getElementById('paperChartKpiStop');
-  if (stopEl) stopEl.textContent = meta.stop_loss ? `₹${meta.stop_loss.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+  if (stopEl) stopEl.textContent = floorStop ? `₹${floorStop.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const softStopEl = document.getElementById('paperChartKpiSoftStop');
+  if (softStopEl) softStopEl.textContent = softStop ? `₹${softStop.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
 
   const targetEl = document.getElementById('paperChartKpiTarget');
-  if (targetEl) targetEl.textContent = meta.target ? `₹${meta.target.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+  if (targetEl) targetEl.textContent = 'Ride Upward Trend';
+  const targetSubEl = document.getElementById('paperChartKpiTargetSub');
+  if (targetSubEl) targetSubEl.textContent = 'NO MAX GOAL · RIDE MOMENTUM';
 
   const investedEl = document.getElementById('paperChartKpiInvested');
   if (investedEl && meta.buy_price) {
@@ -5224,10 +5489,13 @@ function drawPaperSvg() {
   const pricePlotH = H - padTop - padBottom - volumeHeight - 15;
   const volumeTop = H - padBottom - volumeHeight;
 
+  const floorStop = meta.stop_loss || (meta.buy_price ? +(meta.buy_price * 0.93).toFixed(2) : null);
+  const softStop = meta.soft_stop || (meta.buy_price ? +(meta.buy_price * 0.96).toFixed(2) : null);
+
   const highs = history.map(h => h.high);
   const lows = history.map(h => h.low);
-  if (meta.target) highs.push(meta.target * 1.02);
-  if (meta.stop_loss) lows.push(meta.stop_loss * 0.98);
+  if (floorStop) lows.push(floorStop * 0.98);
+  if (softStop) lows.push(softStop * 0.98);
 
   let minP = Math.min(...lows);
   let maxP = Math.max(...highs);
@@ -5244,24 +5512,29 @@ function drawPaperSvg() {
   const getX = i => padLeft + i * stepX;
   const getVolY = v => volumeTop + volumeHeight - (v / maxVol) * volumeHeight;
 
+  const isLight = document.body.classList.contains('light-theme');
+  const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
+  const gridText = '#64748b';
+  const axisStroke = isLight ? '#cbd5e1' : '#334155';
+
   const numSteps = 6;
   let gridSvg = '';
   for (let s = 0; s <= numSteps; s++) {
     const pVal = minP + (s / numSteps) * (maxP - minP);
     const yPos = getY(pVal);
-    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,3" />`;
-    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="#64748b" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
+    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="3,3" />`;
+    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="${gridText}" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
   }
 
   for (let i = 0; i < n; i += Math.ceil(n / 6)) {
     const xPos = getX(i);
     const dStr = history[i].date.slice(5);
-    gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="#1e293b" stroke-width="1" stroke-dasharray="2,4" opacity="0.5" />`;
-    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="#64748b" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
+    gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="2,4" opacity="0.6" />`;
+    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="${gridText}" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
   }
 
-  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="#334155" stroke-width="1" />`;
-  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="#64748b" font-size="9" font-family="'JetBrains Mono', monospace">SIMULATED VOLUME</text>`;
+  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="${axisStroke}" stroke-width="1" />`;
+  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="${gridText}" font-size="9" font-family="'JetBrains Mono', monospace">SIMULATED VOLUME</text>`;
 
   let volSvg = '';
   for (let i = 0; i < n; i++) {
@@ -5274,23 +5547,23 @@ function drawPaperSvg() {
   }
 
   let levelsSvg = '';
-  if (meta.target) {
-    const tY = getY(meta.target);
+  if (softStop) {
+    const ssY = getY(softStop);
     levelsSvg += `
       <g>
-        <line x1="${padLeft}" y1="${tY}" x2="${W - padRight}" y2="${tY}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5,4" />
-        <rect x="${W - padRight - 110}" y="${tY - 11}" width="110" height="20" rx="4" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1" />
-        <text x="${W - padRight - 55}" y="${tY + 3}" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">TARGET: ₹${meta.target.toFixed(0)}</text>
+        <line x1="${padLeft}" y1="${ssY}" x2="${W - padRight}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,4" />
+        <rect x="${W - padRight - 145}" y="${ssY - 11}" width="145" height="20" rx="4" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1" />
+        <text x="${W - padRight - 72}" y="${ssY + 3}" fill="#fbbf24" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">AI SOFT STOP (-4%): ₹${softStop.toFixed(1)}</text>
       </g>
     `;
   }
-  if (meta.stop_loss) {
-    const slY = getY(meta.stop_loss);
+  if (floorStop) {
+    const slY = getY(floorStop);
     levelsSvg += `
       <g>
-        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,4" />
-        <rect x="${W - padRight - 110}" y="${slY - 11}" width="110" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
-        <text x="${W - padRight - 55}" y="${slY + 3}" fill="#f87171" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">STOP: ₹${meta.stop_loss.toFixed(0)}</text>
+        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5,4" />
+        <rect x="${W - padRight - 150}" y="${slY - 11}" width="150" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
+        <text x="${W - padRight - 75}" y="${slY + 3}" fill="#f87171" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">SIMULATED FLOOR (-7%): ₹${floorStop.toFixed(1)}</text>
       </g>
     `;
   }
@@ -5412,23 +5685,27 @@ function drawPaperSvg() {
     const sign = diffFromBuy >= 0 ? '+' : '';
     const diffColor = diffFromBuy >= 0 ? '#34d399' : '#f87171';
     const isBuyDay = item.date === meta.buy_date;
+    const isLightNow = document.body.classList.contains('light-theme');
+    const titleCol = isLightNow ? '#0f172a' : '#fff';
+    const subCol = isLightNow ? '#64748b' : '#94a3b8';
+    const borderCol = isLightNow ? '#e2e8f0' : '#334155';
 
     tooltip.style.display = 'block';
     tooltip.style.left = `${Math.min(rect.width - 200, Math.max(10, e.clientX - rect.left - 90))}px`;
     tooltip.style.top = `15px`;
 
     tooltip.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid #334155">
-        <span class="mono" style="font-weight:700;color:#fff">${item.date}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid ${borderCol}">
+        <span class="mono" style="font-weight:700;color:${titleCol}">${item.date}</span>
         ${isBuyDay ? '<span class="pill pill-mode" style="font-size:9px;padding:1px 5px">PAPER ENTRY</span>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-family:'JetBrains Mono',monospace;font-size:11px">
-        <div><span style="color:#94a3b8">Open:</span> ₹${item.open.toFixed(1)}</div>
-        <div><span style="color:#94a3b8">Close:</span> <strong style="color:#fff">₹${item.close.toFixed(1)}</strong></div>
-        <div><span style="color:#94a3b8">High:</span> ₹${item.high.toFixed(1)}</div>
-        <div><span style="color:#94a3b8">Low:</span> ₹${item.low.toFixed(1)}</div>
-        <div style="grid-column:span 2;color:#94a3b8;padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
-        <div style="grid-column:span 2;padding-top:4px;border-top:1px solid #1e293b;font-size:10.5px">
+        <div><span style="color:${subCol}">Open:</span> ₹${item.open.toFixed(1)}</div>
+        <div><span style="color:${subCol}">Close:</span> <strong style="color:${titleCol}">₹${item.close.toFixed(1)}</strong></div>
+        <div><span style="color:${subCol}">High:</span> ₹${item.high.toFixed(1)}</div>
+        <div><span style="color:${subCol}">Low:</span> ₹${item.low.toFixed(1)}</div>
+        <div style="grid-column:span 2;color:${subCol};padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
+        <div style="grid-column:span 2;padding-top:4px;border-top:1px solid ${borderCol};font-size:10.5px">
           vs Paper Entry: <span style="color:${diffColor};font-weight:700">${sign}${diffFromBuy}%</span>
         </div>
       </div>
@@ -5575,17 +5852,31 @@ function updateActiveStockUI(monitor) {
     pnlEl.style.color = pnlAmt >= 0 ? '#10b981' : '#ef4444';
   }
 
+  const floorStop = meta.stop_loss || (meta.buy_price ? +(meta.buy_price * 0.93).toFixed(2) : null);
+  const softStop = meta.soft_stop || (meta.buy_price ? +(meta.buy_price * 0.96).toFixed(2) : null);
+
   const stopEl = document.getElementById('chartKpiStop');
-  if (stopEl) stopEl.textContent = meta.stop_loss ? `₹${meta.stop_loss.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+  if (stopEl) stopEl.textContent = floorStop ? `₹${floorStop.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
 
   const stopSubEl = document.getElementById('chartKpiStopSub');
   if (stopSubEl) {
-    stopSubEl.textContent = meta.gtt_order ? 'GTT ACTIVE ON GROWW' : 'PAPER THRESHOLD (-7%)';
-    stopSubEl.style.color = meta.gtt_order ? '#34d399' : '#ef4444';
+    stopSubEl.textContent = meta.gtt_order ? `GTT ORDER #${meta.gtt_order.slice(-6)} (-7.0%)` : (isLive ? 'GROWW GTT FLOOR (-7.0%)' : 'PAPER THRESHOLD (-7.0%)');
+    stopSubEl.style.color = '#ef4444';
+  }
+
+  const softStopEl = document.getElementById('chartKpiSoftStop');
+  if (softStopEl) softStopEl.textContent = softStop ? `₹${softStop.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const softStopSubEl = document.getElementById('chartKpiSoftStopSub');
+  if (softStopSubEl) {
+    softStopSubEl.textContent = 'DYNAMIC AI EVALUATION (-4.0%)';
+    softStopSubEl.style.color = '#f59e0b';
   }
 
   const targetEl = document.getElementById('chartKpiTarget');
-  if (targetEl) targetEl.textContent = meta.target ? `₹${meta.target.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+  if (targetEl) targetEl.textContent = 'Ride Upward Trend';
+  const targetSubEl = document.getElementById('chartKpiTargetSub');
+  if (targetSubEl) targetSubEl.textContent = 'NO MAX GOAL · RIDE MOMENTUM';
 
   const investedEl = document.getElementById('chartKpiInvested');
   if (investedEl && meta.buy_price) {
@@ -5599,9 +5890,9 @@ function updateActiveStockUI(monitor) {
   const auditDetail = document.getElementById('chartAuditDetail');
   if (auditDetail) {
     if (meta.gtt_order) {
-      auditDetail.innerHTML = `Live Exchange GTT Stop Order <span class="mono" style="color:#fff;font-weight:700">#${meta.gtt_order}</span> active on Groww at ₹${meta.stop_loss}. Sell triggered automatically if price touches floor.`;
+      auditDetail.innerHTML = `Live Exchange GTT Stop Order <span class="mono" style="color:var(--ink);font-weight:700">#${meta.gtt_order}</span> active on Groww at ₹${floorStop || meta.stop_loss} (-7.0% hard floor). Dynamic AI stop evaluated at ₹${softStop} (-4.0%). No max ceiling—rides upward trend until reversal.`;
     } else {
-      auditDetail.textContent = `Paper sandbox simulation asset monitored by autonomous quantitative engine for momentum and stop levels.`;
+      auditDetail.textContent = `Autonomous quantitative momentum engine with 7% emergency floor and 4% dynamic AI soft stop. Riding momentum with no max goal ceiling.`;
     }
   }
 
@@ -5629,10 +5920,13 @@ function drawHoldingsSvg() {
   const pricePlotH = H - padTop - padBottom - volumeHeight - 15;
   const volumeTop = H - padBottom - volumeHeight;
 
+  const floorStop = meta.stop_loss || (meta.buy_price ? +(meta.buy_price * 0.93).toFixed(2) : null);
+  const softStop = meta.soft_stop || (meta.buy_price ? +(meta.buy_price * 0.96).toFixed(2) : null);
+
   const highs = history.map(h => h.high);
   const lows = history.map(h => h.low);
-  if (meta.target) highs.push(meta.target * 1.02);
-  if (meta.stop_loss) lows.push(meta.stop_loss * 0.98);
+  if (floorStop) lows.push(floorStop * 0.98);
+  if (softStop) lows.push(softStop * 0.98);
 
   let minP = Math.min(...lows);
   let maxP = Math.max(...highs);
@@ -5649,24 +5943,29 @@ function drawHoldingsSvg() {
   const getX = i => padLeft + i * stepX;
   const getVolY = v => volumeTop + volumeHeight - (v / maxVol) * volumeHeight;
 
+  const isLight = document.body.classList.contains('light-theme');
+  const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
+  const gridText = '#64748b';
+  const axisStroke = isLight ? '#cbd5e1' : '#334155';
+
   const numSteps = 6;
   let gridSvg = '';
   for (let s = 0; s <= numSteps; s++) {
     const pVal = minP + (s / numSteps) * (maxP - minP);
     const yPos = getY(pVal);
-    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,3" />`;
-    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="#64748b" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
+    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="3,3" />`;
+    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="${gridText}" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
   }
 
   for (let i = 0; i < n; i += Math.ceil(n / 6)) {
     const xPos = getX(i);
     const dStr = history[i].date.slice(5);
-    gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="#1e293b" stroke-width="1" stroke-dasharray="2,4" opacity="0.5" />`;
-    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="#64748b" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
+    gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="2,4" opacity="0.6" />`;
+    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="${gridText}" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
   }
 
-  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="#334155" stroke-width="1" />`;
-  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="#64748b" font-size="9" font-family="'JetBrains Mono', monospace">VOLUME</text>`;
+  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="${axisStroke}" stroke-width="1" />`;
+  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="${gridText}" font-size="9" font-family="'JetBrains Mono', monospace">VOLUME</text>`;
 
   let volSvg = '';
   for (let i = 0; i < n; i++) {
@@ -5679,23 +5978,23 @@ function drawHoldingsSvg() {
   }
 
   let levelsSvg = '';
-  if (meta.target) {
-    const tY = getY(meta.target);
+  if (softStop) {
+    const ssY = getY(softStop);
     levelsSvg += `
       <g>
-        <line x1="${padLeft}" y1="${tY}" x2="${W - padRight}" y2="${tY}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5,4" />
-        <rect x="${W - padRight - 110}" y="${tY - 11}" width="110" height="20" rx="4" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1" />
-        <text x="${W - padRight - 55}" y="${tY + 3}" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">TARGET: ₹${meta.target.toFixed(0)}</text>
+        <line x1="${padLeft}" y1="${ssY}" x2="${W - padRight}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,4" />
+        <rect x="${W - padRight - 145}" y="${ssY - 11}" width="145" height="20" rx="4" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1" />
+        <text x="${W - padRight - 72}" y="${ssY + 3}" fill="#fbbf24" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">AI SOFT STOP (-4%): ₹${softStop.toFixed(1)}</text>
       </g>
     `;
   }
-  if (meta.stop_loss) {
-    const slY = getY(meta.stop_loss);
+  if (floorStop) {
+    const slY = getY(floorStop);
     levelsSvg += `
       <g>
-        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,4" />
-        <rect x="${W - padRight - 110}" y="${slY - 11}" width="110" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
-        <text x="${W - padRight - 55}" y="${slY + 3}" fill="#f87171" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">STOP: ₹${meta.stop_loss.toFixed(0)}</text>
+        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5,4" />
+        <rect x="${W - padRight - 150}" y="${slY - 11}" width="150" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
+        <text x="${W - padRight - 75}" y="${slY + 3}" fill="#f87171" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">FLOOR STOP (-7%): ₹${floorStop.toFixed(1)}</text>
       </g>
     `;
   }
@@ -5817,23 +6116,27 @@ function drawHoldingsSvg() {
     const sign = diffFromBuy >= 0 ? '+' : '';
     const diffColor = diffFromBuy >= 0 ? '#34d399' : '#f87171';
     const isBuyDay = item.date === meta.buy_date;
+    const isLightNow = document.body.classList.contains('light-theme');
+    const titleCol = isLightNow ? '#0f172a' : '#fff';
+    const subCol = isLightNow ? '#64748b' : '#94a3b8';
+    const borderCol = isLightNow ? '#e2e8f0' : '#334155';
 
     tooltip.style.display = 'block';
     tooltip.style.left = `${Math.min(rect.width - 200, Math.max(10, e.clientX - rect.left - 90))}px`;
     tooltip.style.top = `15px`;
 
     tooltip.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid #334155">
-        <span class="mono" style="font-weight:700;color:#fff">${item.date}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid ${borderCol}">
+        <span class="mono" style="font-weight:700;color:${titleCol}">${item.date}</span>
         ${isBuyDay ? '<span class="pill pill-live" style="font-size:9px;padding:1px 5px">BUY POINT</span>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-family:'JetBrains Mono',monospace;font-size:11px">
-        <div><span style="color:#94a3b8">Open:</span> ₹${item.open.toFixed(1)}</div>
-        <div><span style="color:#94a3b8">Close:</span> <strong style="color:#fff">₹${item.close.toFixed(1)}</strong></div>
-        <div><span style="color:#94a3b8">High:</span> ₹${item.high.toFixed(1)}</div>
-        <div><span style="color:#94a3b8">Low:</span> ₹${item.low.toFixed(1)}</div>
-        <div style="grid-column:span 2;color:#94a3b8;padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
-        <div style="grid-column:span 2;padding-top:4px;border-top:1px solid #1e293b;font-size:10.5px">
+        <div><span style="color:${subCol}">Open:</span> ₹${item.open.toFixed(1)}</div>
+        <div><span style="color:${subCol}">Close:</span> <strong style="color:${titleCol}">₹${item.close.toFixed(1)}</strong></div>
+        <div><span style="color:${subCol}">High:</span> ₹${item.high.toFixed(1)}</div>
+        <div><span style="color:${subCol}">Low:</span> ₹${item.low.toFixed(1)}</div>
+        <div style="grid-column:span 2;color:${subCol};padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
+        <div style="grid-column:span 2;padding-top:4px;border-top:1px solid ${borderCol};font-size:10.5px">
           vs Buy: <span style="color:${diffColor};font-weight:700">${sign}${diffFromBuy}%</span>
         </div>
       </div>
@@ -5897,6 +6200,36 @@ function restoreCardCollapseState() {
   updateToggleAllBtn();
 }
 
+function initTheme() {
+  try {
+    const saved = localStorage.getItem('alvi_theme');
+    const isLight = saved === 'light';
+    if (isLight) {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+    const icon = document.getElementById('themeIcon');
+    const txt = document.getElementById('themeText');
+    if (icon) icon.textContent = isLight ? '🌙' : '☀️';
+    if (txt) txt.textContent = isLight ? 'Dark' : 'Light';
+  } catch (err) {}
+}
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-theme');
+  try {
+    localStorage.setItem('alvi_theme', isLight ? 'light' : 'dark');
+  } catch (err) {}
+  const icon = document.getElementById('themeIcon');
+  const txt = document.getElementById('themeText');
+  if (icon) icon.textContent = isLight ? '🌙' : '☀️';
+  if (txt) txt.textContent = isLight ? 'Dark' : 'Light';
+  if (typeof drawHoldingsSvg === 'function') drawHoldingsSvg();
+  if (typeof drawPaperSvg === 'function') drawPaperSvg();
+}
+
+initTheme();
 restoreCardCollapseState();
 const hashMarket = (window.location.hash || '').replace('#', '').toLowerCase();
 const savedMarket = (hashMarket === 'paper' || hashMarket === 'us' || hashMarket === 'live' || hashMarket === 'india')
