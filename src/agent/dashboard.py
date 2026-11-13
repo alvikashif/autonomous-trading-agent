@@ -3952,12 +3952,16 @@ body.light-theme .toast-body {
         </div>
 
         <div class="chart-controls-cluster">
+          <div class="chart-mode-toggle" title="Timeframe Window">
+            <button id="btnChartTf1M" onclick="setHoldingsTf('1M')" class="chart-btn">1M</button>
+            <button id="btnChartTfAll" onclick="setHoldingsTf('ALL')" class="chart-btn active">All</button>
+          </div>
           <div class="chart-mode-toggle">
             <button id="btnChartCandle" onclick="setHoldingsChartType('candle')" class="chart-btn active">Candles</button>
             <button id="btnChartLine" onclick="setHoldingsChartType('line')" class="chart-btn">Line</button>
           </div>
           <button id="btnChartSma" onclick="toggleHoldingsSma()" class="chart-btn-sma">
-            SMAs (20/50): <strong id="smaLabel" style="color:#10b981">ON</strong>
+            SMAs: <strong id="smaLabel" style="color:#10b981">ON</strong>
           </button>
         </div>
       </div>
@@ -4005,12 +4009,13 @@ body.light-theme .toast-body {
       <div class="chart-legend-bar">
         <div class="chart-legend-items">
           <span class="legend-item"><span class="legend-dot" style="background:#10b981;box-shadow:0 0 6px #10b981"></span> 🟢 Buy Point</span>
-          <span class="legend-item"><span class="legend-dash" style="border-top-color:#ef4444"></span> Floor Stop (-7% GTT)</span>
+          <span class="legend-item"><span class="legend-dash" style="border-top-color:#38bdf8"></span> Latest Quote</span>
           <span class="legend-item"><span class="legend-dash" style="border-top-color:#f59e0b"></span> AI Soft Stop (-4%)</span>
+          <span class="legend-item"><span class="legend-dash" style="border-top-color:#ef4444"></span> Floor Stop (-7% GTT)</span>
           <span class="legend-item"><span class="legend-line" style="background:#fbbf24"></span> SMA 20 (Trend Support)</span>
           <span class="legend-item"><span class="legend-line" style="background:#c084fc"></span> SMA 50</span>
         </div>
-        <div class="chart-instruction-text">Hover or tap candles for detailed daily OHLCV breakdown</div>
+        <div class="chart-instruction-text">Hover or tap candles for live inspection &amp; risk buffers</div>
       </div>
 
       <!-- SVG Chart Wrapper -->
@@ -4150,12 +4155,16 @@ body.light-theme .toast-body {
             <div id="paperChartCompanyDesc" class="chart-desc-text"></div>
           </div>
           <div class="chart-controls-cluster">
+            <div class="chart-mode-toggle" title="Timeframe Window">
+              <button id="btnPaperChartTf1M" onclick="setPaperTf('1M')" class="chart-btn">1M</button>
+              <button id="btnPaperChartTfAll" onclick="setPaperTf('ALL')" class="chart-btn active">All</button>
+            </div>
             <div class="chart-mode-toggle">
               <button id="btnPaperChartCandle" onclick="setPaperChartType('candle')" class="chart-btn active">Candles</button>
               <button id="btnPaperChartLine" onclick="setPaperChartType('line')" class="chart-btn">Line</button>
             </div>
             <button id="btnPaperChartSma" onclick="togglePaperSma()" class="chart-btn-sma">
-              SMAs (20/50): <strong id="paperSmaLabel" style="color:#10b981">ON</strong>
+              SMAs: <strong id="paperSmaLabel" style="color:#10b981">ON</strong>
             </button>
           </div>
         </div>
@@ -4196,6 +4205,19 @@ body.light-theme .toast-body {
             <div id="paperChartKpiInvested" class="chart-metric-val mono">--</div>
             <div class="chart-metric-sub">Allocated Sandbox</div>
           </div>
+        </div>
+
+        <!-- Paper Legend Bar -->
+        <div class="chart-legend-bar">
+          <div class="chart-legend-items">
+            <span class="legend-item"><span class="legend-dot" style="background:#38bdf8;box-shadow:0 0 6px #38bdf8"></span> 🔵 Paper Entry</span>
+            <span class="legend-item"><span class="legend-dash" style="border-top-color:#38bdf8"></span> Latest Quote</span>
+            <span class="legend-item"><span class="legend-dash" style="border-top-color:#f59e0b"></span> AI Soft Stop (-4%)</span>
+            <span class="legend-item"><span class="legend-dash" style="border-top-color:#ef4444"></span> Floor Stop (-7%)</span>
+            <span class="legend-item"><span class="legend-line" style="background:#fbbf24"></span> SMA 20</span>
+            <span class="legend-item"><span class="legend-line" style="background:#c084fc"></span> SMA 50</span>
+          </div>
+          <div class="chart-instruction-text">Hover or tap candles for simulated OHLCV &amp; buffers</div>
         </div>
 
         <div class="chart-canvas-wrap">
@@ -5321,11 +5343,67 @@ function renderPaperSandbox(p) {
   }
 }
 
+// Clean Axis Badge Anti-Collision Renderer
+function renderAxisBadges(badges, axisX, minY, maxY) {
+  if (!badges || !badges.length) return '';
+  const items = badges.map(b => ({ ...b, targetY: b.y, finalY: b.y }));
+  items.sort((a, b) => a.targetY - b.targetY);
+
+  const minSpacing = 22;
+  for (let i = 1; i < items.length; i++) {
+    if (items[i].finalY - items[i - 1].finalY < minSpacing) {
+      items[i].finalY = items[i - 1].finalY + minSpacing;
+    }
+  }
+  if (items[items.length - 1].finalY > maxY) {
+    items[items.length - 1].finalY = maxY;
+    for (let i = items.length - 2; i >= 0; i--) {
+      if (items[i + 1].finalY - items[i].finalY < minSpacing) {
+        items[i].finalY = items[i + 1].finalY - minSpacing;
+      }
+    }
+  }
+
+  let svg = '';
+  for (const b of items) {
+    const isShifted = Math.abs(b.finalY - b.targetY) > 2;
+    if (isShifted) {
+      svg += `<path d="M ${axisX} ${b.targetY.toFixed(1)} L ${axisX + 5} ${b.finalY.toFixed(1)}" stroke="${b.stroke}" stroke-width="1.2" fill="none" opacity="0.8" />`;
+    }
+    const h = b.isLast ? 22 : 19;
+    const w = 114;
+    const yRect = (b.finalY - h / 2).toFixed(1);
+    const filter = b.isLast ? 'filter="drop-shadow(0 2px 6px rgba(2, 132, 199, 0.45))"' : '';
+    const strokeWidth = b.isLast ? 1.5 : 1;
+    const fontSize = b.isLast ? 10.5 : 9.5;
+    const fontWeight = b.isLast ? 800 : 700;
+
+    svg += `
+      <g>
+        <rect x="${axisX + 5}" y="${yRect}" width="${w}" height="${h}" rx="4" fill="${b.fill}" stroke="${b.stroke}" stroke-width="${strokeWidth}" ${filter} />
+        ${b.isLast ? `<circle cx="${axisX + 16}" cy="${b.finalY.toFixed(1)}" r="3" fill="#ffffff" />` : ''}
+        <text x="${axisX + (b.isLast ? 64 : 62)}" y="${(b.finalY + 3.5).toFixed(1)}" fill="${b.textColor || '#ffffff'}" font-size="${fontSize}" font-weight="${fontWeight}" text-anchor="middle" font-family="'JetBrains Mono', monospace">${b.text}</text>
+      </g>
+    `;
+  }
+  return svg;
+}
+
 // Paper Sandbox Technical Chart & Entry Point Annotation
 let paperChartsData = {};
 let currentPaperSymbol = '';
 let paperChartDisplayType = 'candle';
 let showPaperChartSma = true;
+let paperTimeframe = 'ALL';
+
+function setPaperTf(tf) {
+  paperTimeframe = tf;
+  const btn1M = document.getElementById('btnPaperChartTf1M');
+  const btnAll = document.getElementById('btnPaperChartTfAll');
+  if (btn1M) btn1M.className = (tf === '1M') ? 'chart-btn active' : 'chart-btn';
+  if (btnAll) btnAll.className = (tf === 'ALL') ? 'chart-btn active' : 'chart-btn';
+  drawPaperSvg();
+}
 
 function renderPaperCharts(charts) {
   const card = document.getElementById('paperChartCard');
@@ -5471,42 +5549,51 @@ function updateActivePaperStockUI() {
 function drawPaperSvg() {
   const stock = paperChartsData[currentPaperSymbol];
   if (!stock) return;
-  const history = stock.history || [];
+  const rawHistory = stock.history || [];
   const meta = stock.meta || {};
   const svg = document.getElementById('paperSvgChart');
-  if (!svg || !history.length) return;
+  if (!svg || !rawHistory.length) return;
   svg.innerHTML = '';
+
+  const history = (paperTimeframe === '1M' && rawHistory.length > 25) ? rawHistory.slice(-25) : rawHistory;
+  const n = history.length;
+  if (!n) return;
 
   const W = 960;
   const H = 500;
-  const padLeft = 65;
-  const padRight = 35;
-  const padTop = 35;
-  const padBottom = 70;
-  const volumeHeight = 65;
+  const padLeft = 32;
+  const padRight = 125; // Dedicated right price scale column
+  const padTop = 32;
+  const padBottom = 60;
+  const volumeHeight = 60;
 
   const plotW = W - padLeft - padRight;
   const pricePlotH = H - padTop - padBottom - volumeHeight - 15;
   const volumeTop = H - padBottom - volumeHeight;
+  const rightBorderX = W - padRight;
 
   const floorStop = meta.stop_loss || (meta.buy_price ? +(meta.buy_price * 0.93).toFixed(2) : null);
   const softStop = meta.soft_stop || (meta.buy_price ? +(meta.buy_price * 0.96).toFixed(2) : null);
 
   const highs = history.map(h => h.high);
   const lows = history.map(h => h.low);
-  if (floorStop) lows.push(floorStop * 0.98);
-  if (softStop) lows.push(softStop * 0.98);
+  if (floorStop) lows.push(floorStop * 0.985);
+  if (softStop) lows.push(softStop * 0.985);
+  if (meta.buy_price) highs.push(meta.buy_price * 1.015);
 
   let minP = Math.min(...lows);
   let maxP = Math.max(...highs);
   const pRange = maxP - minP || 1;
-  minP -= pRange * 0.04;
-  maxP += pRange * 0.04;
+  minP -= pRange * 0.05;
+  maxP += pRange * 0.05;
 
   const maxVol = Math.max(...history.map(h => h.volume)) || 1;
-  const n = history.length;
-  const stepX = plotW / (n - 1 || 1);
-  const candleW = Math.max(3, Math.min(10, (plotW / n) * 0.65));
+
+  // 35px right breathing room so candles don't touch the right axis border
+  const rightBreathingRoom = 35;
+  const candleAvailableW = plotW - rightBreathingRoom;
+  const stepX = n > 1 ? candleAvailableW / (n - 1) : candleAvailableW;
+  const candleW = Math.max(4, Math.min(16, (candleAvailableW / n) * 0.65));
 
   const getY = p => padTop + pricePlotH - ((p - minP) / (maxP - minP)) * pricePlotH;
   const getX = i => padLeft + i * stepX;
@@ -5516,25 +5603,59 @@ function drawPaperSvg() {
   const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
   const gridText = '#64748b';
   const axisStroke = isLight ? '#cbd5e1' : '#334155';
+  const rightColBg = isLight ? 'rgba(248, 250, 252, 0.9)' : 'rgba(15, 23, 42, 0.65)';
 
+  // 1. Right Column & Axis Background
+  let bgSvg = `
+    <rect x="${rightBorderX}" y="${padTop - 12}" width="${padRight}" height="${H - padBottom - padTop + 22}" fill="${rightColBg}" />
+    <line x1="${rightBorderX}" y1="${padTop - 12}" x2="${rightBorderX}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" />
+  `;
+
+  // 2. Protection Zone Shading & Momentum Zone
+  let zonesSvg = '';
+  if (floorStop && softStop) {
+    const topZoneY = Math.min(getY(floorStop), getY(softStop));
+    const botZoneY = Math.max(getY(floorStop), getY(softStop));
+    const zoneH = botZoneY - topZoneY;
+    zonesSvg += `
+      <g opacity="0.75">
+        <rect x="${padLeft}" y="${topZoneY}" width="${rightBorderX - padLeft}" height="${zoneH}" fill="rgba(239, 68, 68, 0.07)" />
+        <line x1="${padLeft}" y1="${topZoneY}" x2="${rightBorderX}" y2="${topZoneY}" stroke="rgba(245, 158, 11, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
+        <line x1="${padLeft}" y1="${botZoneY}" x2="${rightBorderX}" y2="${botZoneY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
+        <text x="${padLeft + 8}" y="${topZoneY + 12}" fill="#f59e0b" font-size="8.5" font-weight="700" font-family="'JetBrains Mono', monospace" letter-spacing="0.5">DEFENSE / EVALUATION ZONE (-4% to -7%)</text>
+      </g>
+    `;
+  }
+  if (meta.buy_price) {
+    const bY = getY(meta.buy_price);
+    if (bY > padTop) {
+      zonesSvg += `
+        <rect x="${padLeft}" y="${padTop}" width="${rightBorderX - padLeft}" height="${bY - padTop}" fill="rgba(56, 189, 248, 0.025)" />
+      `;
+    }
+  }
+
+  // 3. Grid Lines & Right Price Scale Ticks
   const numSteps = 6;
   let gridSvg = '';
   for (let s = 0; s <= numSteps; s++) {
     const pVal = minP + (s / numSteps) * (maxP - minP);
     const yPos = getY(pVal);
-    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="3,3" />`;
-    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="${gridText}" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
+    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${rightBorderX}" y2="${yPos}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="3,3" />`;
+    gridSvg += `<text x="${rightBorderX + 10}" y="${yPos + 3.5}" fill="${gridText}" font-size="9.5" text-anchor="start" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
   }
 
-  for (let i = 0; i < n; i += Math.ceil(n / 6)) {
+  const dateInterval = Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += dateInterval) {
     const xPos = getX(i);
     const dStr = history[i].date.slice(5);
     gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="2,4" opacity="0.6" />`;
-    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="${gridText}" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
+    gridSvg += `<text x="${xPos}" y="${H - padBottom + 16}" fill="${gridText}" font-size="9.5" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
   }
 
-  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="${axisStroke}" stroke-width="1" />`;
-  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="${gridText}" font-size="9" font-family="'JetBrains Mono', monospace">SIMULATED VOLUME</text>`;
+  // 4. Volume Histogram
+  gridSvg += `<line x1="${padLeft}" y1="${volumeTop}" x2="${rightBorderX}" y2="${volumeTop}" stroke="${axisStroke}" stroke-width="1" />`;
+  gridSvg += `<text x="${padLeft}" y="${volumeTop - 6}" fill="${gridText}" font-size="8.5" font-weight="600" font-family="'JetBrains Mono', monospace">SIMULATED VOLUME</text>`;
 
   let volSvg = '';
   for (let i = 0; i < n; i++) {
@@ -5542,42 +5663,11 @@ function drawPaperSvg() {
     const x = getX(i) - candleW / 2;
     const y = getVolY(h.volume);
     const barH = volumeTop + volumeHeight - y;
-    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)';
-    volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" />`;
+    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+    volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" rx="0.5" />`;
   }
 
-  let levelsSvg = '';
-  if (softStop) {
-    const ssY = getY(softStop);
-    levelsSvg += `
-      <g>
-        <line x1="${padLeft}" y1="${ssY}" x2="${W - padRight}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,4" />
-        <rect x="${W - padRight - 145}" y="${ssY - 11}" width="145" height="20" rx="4" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1" />
-        <text x="${W - padRight - 72}" y="${ssY + 3}" fill="#fbbf24" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">AI SOFT STOP (-4%): ₹${softStop.toFixed(1)}</text>
-      </g>
-    `;
-  }
-  if (floorStop) {
-    const slY = getY(floorStop);
-    levelsSvg += `
-      <g>
-        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5,4" />
-        <rect x="${W - padRight - 150}" y="${slY - 11}" width="150" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
-        <text x="${W - padRight - 75}" y="${slY + 3}" fill="#f87171" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">SIMULATED FLOOR (-7%): ₹${floorStop.toFixed(1)}</text>
-      </g>
-    `;
-  }
-
-  const lastClose = history[n - 1].close;
-  const lastY = getY(lastClose);
-  levelsSvg += `
-    <g>
-      <line x1="${padLeft}" y1="${lastY}" x2="${W - padRight}" y2="${lastY}" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,3" />
-      <rect x="${padLeft}" y="${lastY - 10}" width="80" height="18" rx="3" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="1" />
-      <text x="${padLeft + 40}" y="${lastY + 3}" fill="#38bdf8" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">₹${lastClose.toFixed(1)}</text>
-    </g>
-  `;
-
+  // 5. Candlesticks / Line Chart
   let priceSvg = '';
   if (paperChartDisplayType === 'candle') {
     for (let i = 0; i < n; i++) {
@@ -5601,10 +5691,11 @@ function drawPaperSvg() {
       pathD += ` L ${getX(i)} ${getY(history[i].close)}`;
     }
     const areaD = pathD + ` L ${getX(n - 1)} ${padTop + pricePlotH} L ${getX(0)} ${padTop + pricePlotH} Z`;
-    priceSvg += `<path d="${areaD}" fill="url(#paperChartAreaGrad)" opacity="0.4" />`;
+    priceSvg += `<path d="${areaD}" fill="url(#paperChartAreaGrad)" opacity="0.35" />`;
     priceSvg += `<path d="${pathD}" fill="none" stroke="#38bdf8" stroke-width="2.2" />`;
   }
 
+  // 6. SMAs
   let smaSvg = '';
   if (showPaperChartSma) {
     let pSma20 = '';
@@ -5619,10 +5710,11 @@ function drawPaperSvg() {
         pSma50 += ` ${cmd} ${getX(i)} ${getY(history[i].sma50)}`;
       }
     }
-    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.4" opacity="0.85" />`;
-    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.4" opacity="0.85" />`;
+    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity="0.9" />`;
+    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.5" opacity="0.9" />`;
   }
 
+  // 7. Paper Buy Point Callout (compact, no clipping)
   let buySvg = '';
   const buyIdx = history.findIndex(h => h.date === meta.buy_date);
   if (buyIdx !== -1) {
@@ -5630,39 +5722,121 @@ function drawPaperSvg() {
     const buyY = getY(meta.buy_price);
     const candleTop = getY(history[buyIdx].high);
 
-    buySvg = `
-      <line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#38bdf8" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.8" />
-      <circle cx="${buyX}" cy="${buyY}" r="14" fill="rgba(56, 189, 248, 0.2)" />
-      <circle cx="${buyX}" cy="${buyY}" r="8" fill="rgba(56, 189, 248, 0.4)" />
+    buySvg += `<line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7" />`;
+    buySvg += `<line x1="${buyX}" y1="${buyY}" x2="${rightBorderX}" y2="${buyY}" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,3" opacity="0.6" />`;
+    buySvg += `
+      <circle cx="${buyX}" cy="${buyY}" r="10" fill="rgba(56, 189, 248, 0.25)" />
       <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
-      <g transform="translate(${buyX}, ${Math.max(padTop + 10, candleTop - 45)})">
-        <polygon points="0,35 -6,27 6,27" fill="#0284c7" />
-        <rect x="-75" y="0" width="150" height="28" rx="6" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.5" filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.6))" />
-        <text x="0" y="14" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+    `;
+
+    const calloutW = 126;
+    const calloutH = 26;
+    const calloutX = Math.max(padLeft + calloutW / 2 + 2, Math.min(rightBorderX - calloutW / 2 - 4, buyX));
+    const calloutY = Math.max(padTop + 4, candleTop - 34);
+
+    buySvg += `
+      <g>
+        <polygon points="${buyX},${calloutY + calloutH} ${buyX - 5},${calloutY + calloutH - 5} ${buyX + 5},${calloutY + calloutH - 5}" fill="#0284c7" />
+        <rect x="${calloutX - calloutW / 2}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.2" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.5))" />
+        <text x="${calloutX}" y="${calloutY + 11}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">
           PAPER @ ₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 1})}
         </text>
-        <text x="0" y="24" fill="#7dd3fc" font-size="8" font-weight="bold" text-anchor="middle" font-family="sans-serif">
-          ${meta.buy_date} · ${meta.qty || 1} SHARES
+        <text x="${calloutX}" y="${calloutY + 20}" fill="#7dd3fc" font-size="7.5" font-weight="600" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+          ${meta.buy_date.slice(5)} · ${meta.qty || 1} SHARES
         </text>
       </g>
     `;
   }
 
+  // 8. Dedicated Right Axis Price Badges (Zero Overlap with Candles)
+  const lastClose = history[n - 1].close;
+  const lastY = getY(lastClose);
+
+  let linesSvg = `
+    <line x1="${padLeft}" y1="${lastY}" x2="${rightBorderX}" y2="${lastY}" stroke="#38bdf8" stroke-width="1.4" stroke-dasharray="2,3" />
+  `;
+  if (softStop) {
+    const ssY = getY(softStop);
+    linesSvg += `<line x1="${padLeft}" y1="${ssY}" x2="${rightBorderX}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="4,4" />`;
+  }
+  if (floorStop) {
+    const slY = getY(floorStop);
+    linesSvg += `<line x1="${padLeft}" y1="${slY}" x2="${rightBorderX}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" />`;
+  }
+  if (meta.buy_price) {
+    const bY = getY(meta.buy_price);
+    linesSvg += `<line x1="${padLeft}" y1="${bY}" x2="${rightBorderX}" y2="${bY}" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.65" />`;
+  }
+
+  const badges = [];
+  badges.push({
+    y: lastY,
+    text: `₹${lastClose.toFixed(1)} · LAST`,
+    fill: '#0284c7',
+    stroke: '#38bdf8',
+    textColor: '#ffffff',
+    isLast: true
+  });
+  if (softStop) {
+    badges.push({
+      y: getY(softStop),
+      text: `AI STOP ₹${softStop.toFixed(1)}`,
+      fill: 'rgba(180, 83, 9, 0.95)',
+      stroke: '#fbbf24',
+      textColor: '#ffffff'
+    });
+  }
+  if (floorStop) {
+    badges.push({
+      y: getY(floorStop),
+      text: `FLOOR ₹${floorStop.toFixed(1)}`,
+      fill: 'rgba(185, 28, 28, 0.95)',
+      stroke: '#f87171',
+      textColor: '#ffffff'
+    });
+  }
+  if (meta.buy_price) {
+    badges.push({
+      y: getY(meta.buy_price),
+      text: `PAPER ₹${meta.buy_price.toFixed(1)}`,
+      fill: '#0c4a6e',
+      stroke: '#38bdf8',
+      textColor: '#7dd3fc'
+    });
+  }
+
+  const axisBadgesSvg = renderAxisBadges(badges, rightBorderX, padTop, volumeTop + volumeHeight);
+
+  // 9. Interactive Crosshair Elements
+  const crosshairSvg = `
+    <g id="paperCrosshairG" style="display:none;pointer-events:none">
+      <line id="paperCrossX" y1="${padTop}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
+      <line id="paperCrossY" x1="${padLeft}" x2="${rightBorderX}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
+      <rect id="paperCrossTagY" x="${rightBorderX + 4}" width="72" height="18" rx="3" fill="#334155" />
+      <text id="paperCrossTagYText" x="${rightBorderX + 40}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace"></text>
+    </g>
+  `;
+
   svg.innerHTML = `
     <defs>
       <linearGradient id="paperChartAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/>
+        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5"/>
         <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
       </linearGradient>
     </defs>
+    ${bgSvg}
+    ${zonesSvg}
     ${gridSvg}
     ${volSvg}
-    ${levelsSvg}
+    ${linesSvg}
     ${priceSvg}
     ${smaSvg}
     ${buySvg}
+    ${axisBadgesSvg}
+    ${crosshairSvg}
   `;
 
+  // 10. Container Mouse Interaction
   const container = svg.parentElement;
   const tooltip = document.getElementById('paperChartTooltip');
   if (!container || !tooltip) return;
@@ -5671,9 +5845,12 @@ function drawPaperSvg() {
     const rect = svg.getBoundingClientRect();
     const scaleX = 960 / rect.width;
     const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * (500 / rect.height);
 
-    if (mouseX < padLeft || mouseX > W - padRight) {
+    if (mouseX < padLeft || mouseX > rightBorderX) {
       tooltip.style.display = 'none';
+      const cross = document.getElementById('paperCrosshairG');
+      if (cross) cross.style.display = 'none';
       return;
     }
 
@@ -5681,39 +5858,73 @@ function drawPaperSvg() {
     const item = history[idx];
     if (!item) return;
 
+    const candleX = getX(idx);
+    const cross = document.getElementById('paperCrosshairG');
+    if (cross) {
+      cross.style.display = 'block';
+      const lineX = document.getElementById('paperCrossX');
+      const lineY = document.getElementById('paperCrossY');
+      const tagY = document.getElementById('paperCrossTagY');
+      const tagTextY = document.getElementById('paperCrossTagYText');
+      if (lineX) { lineX.setAttribute('x1', candleX); lineX.setAttribute('x2', candleX); }
+      if (lineY) { lineY.setAttribute('y1', mouseY); lineY.setAttribute('y2', mouseY); }
+      if (tagY && tagTextY) {
+        const hoverP = minP + ((padTop + pricePlotH - mouseY) / pricePlotH) * (maxP - minP);
+        tagY.setAttribute('y', mouseY - 9);
+        tagTextY.setAttribute('y', mouseY + 3.5);
+        tagTextY.textContent = '₹' + hoverP.toFixed(1);
+      }
+    }
+
     const diffFromBuy = meta.buy_price ? ((item.close / meta.buy_price - 1) * 100).toFixed(2) : '0.00';
     const sign = diffFromBuy >= 0 ? '+' : '';
-    const diffColor = diffFromBuy >= 0 ? '#34d399' : '#f87171';
+    const diffColor = diffFromBuy >= 0 ? '#10b981' : '#ef4444';
     const isBuyDay = item.date === meta.buy_date;
+
+    const distToSoft = softStop ? (((item.close / softStop) - 1) * 100).toFixed(2) : null;
+    const distToFloor = floorStop ? (((item.close / floorStop) - 1) * 100).toFixed(2) : null;
+
     const isLightNow = document.body.classList.contains('light-theme');
-    const titleCol = isLightNow ? '#0f172a' : '#fff';
+    const titleCol = isLightNow ? '#0f172a' : '#ffffff';
     const subCol = isLightNow ? '#64748b' : '#94a3b8';
     const borderCol = isLightNow ? '#e2e8f0' : '#334155';
 
     tooltip.style.display = 'block';
-    tooltip.style.left = `${Math.min(rect.width - 200, Math.max(10, e.clientX - rect.left - 90))}px`;
+    tooltip.style.left = `${Math.min(rect.width - 240, Math.max(10, e.clientX - rect.left - 100))}px`;
     tooltip.style.top = `15px`;
 
     tooltip.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid ${borderCol}">
-        <span class="mono" style="font-weight:700;color:${titleCol}">${item.date}</span>
-        ${isBuyDay ? '<span class="pill pill-mode" style="font-size:9px;padding:1px 5px">PAPER ENTRY</span>' : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:5px;margin-bottom:6px;border-bottom:1px solid ${borderCol}">
+        <span class="mono" style="font-weight:700;color:${titleCol};font-size:12px">${item.date}</span>
+        ${isBuyDay ? '<span class="pill pill-mode" style="font-size:9px;padding:2px 6px">PAPER ENTRY POINT</span>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-family:'JetBrains Mono',monospace;font-size:11px">
         <div><span style="color:${subCol}">Open:</span> ₹${item.open.toFixed(1)}</div>
         <div><span style="color:${subCol}">Close:</span> <strong style="color:${titleCol}">₹${item.close.toFixed(1)}</strong></div>
         <div><span style="color:${subCol}">High:</span> ₹${item.high.toFixed(1)}</div>
         <div><span style="color:${subCol}">Low:</span> ₹${item.low.toFixed(1)}</div>
-        <div style="grid-column:span 2;color:${subCol};padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
+        <div style="grid-column:span 2;color:${subCol}">Vol: ${(item.volume / 1000).toLocaleString('en-IN', {maximumFractionDigits: 1})}k shares</div>
         <div style="grid-column:span 2;padding-top:4px;border-top:1px solid ${borderCol};font-size:10.5px">
-          vs Paper Entry: <span style="color:${diffColor};font-weight:700">${sign}${diffFromBuy}%</span>
+          vs Paper Entry (₹${(meta.buy_price || 0).toFixed(1)}): <strong style="color:${diffColor}">${sign}${diffFromBuy}%</strong>
         </div>
+        ${distToSoft !== null ? `
+          <div style="grid-column:span 2;font-size:10px;color:#f59e0b">
+            Cushion to AI Soft Stop (-4%): <strong>${distToSoft >= 0 ? '+' : ''}${distToSoft}%</strong>
+          </div>
+        ` : ''}
+        ${distToFloor !== null ? `
+          <div style="grid-column:span 2;font-size:10px;color:#ef4444">
+            Cushion to Floor Stop (-7%): <strong>${distToFloor >= 0 ? '+' : ''}${distToFloor}%</strong>
+          </div>
+        ` : ''}
       </div>
     `;
   };
 
   container.onmouseleave = function() {
     tooltip.style.display = 'none';
+    const cross = document.getElementById('paperCrosshairG');
+    if (cross) cross.style.display = 'none';
   };
 }
 
@@ -5722,6 +5933,16 @@ let holdingsChartsData = {};
 let currentChartSymbol = 'SHYAMMETL';
 let chartDisplayType = 'candle';
 let showChartSma = true;
+let holdingsTimeframe = 'ALL';
+
+function setHoldingsTf(tf) {
+  holdingsTimeframe = tf;
+  const btn1M = document.getElementById('btnChartTf1M');
+  const btnAll = document.getElementById('btnChartTfAll');
+  if (btn1M) btn1M.className = (tf === '1M') ? 'chart-btn active' : 'chart-btn';
+  if (btnAll) btnAll.className = (tf === 'ALL') ? 'chart-btn active' : 'chart-btn';
+  drawHoldingsSvg();
+}
 
 function renderHoldingsCharts(charts, monitor) {
   const card = document.getElementById('chartCard');
@@ -5902,42 +6123,51 @@ function updateActiveStockUI(monitor) {
 function drawHoldingsSvg() {
   const stock = holdingsChartsData[currentChartSymbol];
   if (!stock) return;
-  const history = stock.history || [];
+  const rawHistory = stock.history || [];
   const meta = stock.meta || {};
   const svg = document.getElementById('holdingsSvgChart');
-  if (!svg || !history.length) return;
+  if (!svg || !rawHistory.length) return;
   svg.innerHTML = '';
+
+  const history = (holdingsTimeframe === '1M' && rawHistory.length > 25) ? rawHistory.slice(-25) : rawHistory;
+  const n = history.length;
+  if (!n) return;
 
   const W = 960;
   const H = 500;
-  const padLeft = 65;
-  const padRight = 35;
-  const padTop = 35;
-  const padBottom = 70;
-  const volumeHeight = 65;
+  const padLeft = 32;
+  const padRight = 125; // Dedicated right price scale column!
+  const padTop = 32;
+  const padBottom = 60;
+  const volumeHeight = 60;
 
   const plotW = W - padLeft - padRight;
   const pricePlotH = H - padTop - padBottom - volumeHeight - 15;
   const volumeTop = H - padBottom - volumeHeight;
+  const rightBorderX = W - padRight;
 
   const floorStop = meta.stop_loss || (meta.buy_price ? +(meta.buy_price * 0.93).toFixed(2) : null);
   const softStop = meta.soft_stop || (meta.buy_price ? +(meta.buy_price * 0.96).toFixed(2) : null);
 
   const highs = history.map(h => h.high);
   const lows = history.map(h => h.low);
-  if (floorStop) lows.push(floorStop * 0.98);
-  if (softStop) lows.push(softStop * 0.98);
+  if (floorStop) lows.push(floorStop * 0.985);
+  if (softStop) lows.push(softStop * 0.985);
+  if (meta.buy_price) highs.push(meta.buy_price * 1.015);
 
   let minP = Math.min(...lows);
   let maxP = Math.max(...highs);
   const pRange = maxP - minP || 1;
-  minP -= pRange * 0.04;
-  maxP += pRange * 0.04;
+  minP -= pRange * 0.05;
+  maxP += pRange * 0.05;
 
   const maxVol = Math.max(...history.map(h => h.volume)) || 1;
-  const n = history.length;
-  const stepX = plotW / (n - 1 || 1);
-  const candleW = Math.max(3, Math.min(10, (plotW / n) * 0.65));
+
+  // 35px right breathing room so candles don't touch the right axis border
+  const rightBreathingRoom = 35;
+  const candleAvailableW = plotW - rightBreathingRoom;
+  const stepX = n > 1 ? candleAvailableW / (n - 1) : candleAvailableW;
+  const candleW = Math.max(4, Math.min(16, (candleAvailableW / n) * 0.65));
 
   const getY = p => padTop + pricePlotH - ((p - minP) / (maxP - minP)) * pricePlotH;
   const getX = i => padLeft + i * stepX;
@@ -5947,25 +6177,59 @@ function drawHoldingsSvg() {
   const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
   const gridText = '#64748b';
   const axisStroke = isLight ? '#cbd5e1' : '#334155';
+  const rightColBg = isLight ? 'rgba(248, 250, 252, 0.9)' : 'rgba(15, 23, 42, 0.65)';
 
+  // 1. Right Column & Axis Background
+  let bgSvg = `
+    <rect x="${rightBorderX}" y="${padTop - 12}" width="${padRight}" height="${H - padBottom - padTop + 22}" fill="${rightColBg}" />
+    <line x1="${rightBorderX}" y1="${padTop - 12}" x2="${rightBorderX}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" />
+  `;
+
+  // 2. Protection Zone Shading & Momentum Zone
+  let zonesSvg = '';
+  if (floorStop && softStop) {
+    const topZoneY = Math.min(getY(floorStop), getY(softStop));
+    const botZoneY = Math.max(getY(floorStop), getY(softStop));
+    const zoneH = botZoneY - topZoneY;
+    zonesSvg += `
+      <g opacity="0.75">
+        <rect x="${padLeft}" y="${topZoneY}" width="${rightBorderX - padLeft}" height="${zoneH}" fill="rgba(239, 68, 68, 0.07)" />
+        <line x1="${padLeft}" y1="${topZoneY}" x2="${rightBorderX}" y2="${topZoneY}" stroke="rgba(245, 158, 11, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
+        <line x1="${padLeft}" y1="${botZoneY}" x2="${rightBorderX}" y2="${botZoneY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
+        <text x="${padLeft + 8}" y="${topZoneY + 12}" fill="#f59e0b" font-size="8.5" font-weight="700" font-family="'JetBrains Mono', monospace" letter-spacing="0.5">DEFENSE / EVALUATION ZONE (-4% to -7%)</text>
+      </g>
+    `;
+  }
+  if (meta.buy_price) {
+    const bY = getY(meta.buy_price);
+    if (bY > padTop) {
+      zonesSvg += `
+        <rect x="${padLeft}" y="${padTop}" width="${rightBorderX - padLeft}" height="${bY - padTop}" fill="rgba(16, 185, 129, 0.025)" />
+      `;
+    }
+  }
+
+  // 3. Grid Lines & Right Price Scale Ticks
   const numSteps = 6;
   let gridSvg = '';
   for (let s = 0; s <= numSteps; s++) {
     const pVal = minP + (s / numSteps) * (maxP - minP);
     const yPos = getY(pVal);
-    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="3,3" />`;
-    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="${gridText}" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
+    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${rightBorderX}" y2="${yPos}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="3,3" />`;
+    gridSvg += `<text x="${rightBorderX + 10}" y="${yPos + 3.5}" fill="${gridText}" font-size="9.5" text-anchor="start" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
   }
 
-  for (let i = 0; i < n; i += Math.ceil(n / 6)) {
+  const dateInterval = Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += dateInterval) {
     const xPos = getX(i);
     const dStr = history[i].date.slice(5);
     gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="${gridStroke}" stroke-width="1" stroke-dasharray="2,4" opacity="0.6" />`;
-    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="${gridText}" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
+    gridSvg += `<text x="${xPos}" y="${H - padBottom + 16}" fill="${gridText}" font-size="9.5" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
   }
 
-  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="${axisStroke}" stroke-width="1" />`;
-  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="${gridText}" font-size="9" font-family="'JetBrains Mono', monospace">VOLUME</text>`;
+  // 4. Volume Histogram
+  gridSvg += `<line x1="${padLeft}" y1="${volumeTop}" x2="${rightBorderX}" y2="${volumeTop}" stroke="${axisStroke}" stroke-width="1" />`;
+  gridSvg += `<text x="${padLeft}" y="${volumeTop - 6}" fill="${gridText}" font-size="8.5" font-weight="600" font-family="'JetBrains Mono', monospace">DAILY VOLUME</text>`;
 
   let volSvg = '';
   for (let i = 0; i < n; i++) {
@@ -5973,42 +6237,11 @@ function drawHoldingsSvg() {
     const x = getX(i) - candleW / 2;
     const y = getVolY(h.volume);
     const barH = volumeTop + volumeHeight - y;
-    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)';
-    volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" />`;
+    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+    volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" rx="0.5" />`;
   }
 
-  let levelsSvg = '';
-  if (softStop) {
-    const ssY = getY(softStop);
-    levelsSvg += `
-      <g>
-        <line x1="${padLeft}" y1="${ssY}" x2="${W - padRight}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,4" />
-        <rect x="${W - padRight - 145}" y="${ssY - 11}" width="145" height="20" rx="4" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1" />
-        <text x="${W - padRight - 72}" y="${ssY + 3}" fill="#fbbf24" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">AI SOFT STOP (-4%): ₹${softStop.toFixed(1)}</text>
-      </g>
-    `;
-  }
-  if (floorStop) {
-    const slY = getY(floorStop);
-    levelsSvg += `
-      <g>
-        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5,4" />
-        <rect x="${W - padRight - 150}" y="${slY - 11}" width="150" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
-        <text x="${W - padRight - 75}" y="${slY + 3}" fill="#f87171" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">FLOOR STOP (-7%): ₹${floorStop.toFixed(1)}</text>
-      </g>
-    `;
-  }
-
-  const lastClose = history[n - 1].close;
-  const lastY = getY(lastClose);
-  levelsSvg += `
-    <g>
-      <line x1="${padLeft}" y1="${lastY}" x2="${W - padRight}" y2="${lastY}" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,3" />
-      <rect x="${padLeft}" y="${lastY - 10}" width="80" height="18" rx="3" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="1" />
-      <text x="${padLeft + 40}" y="${lastY + 3}" fill="#38bdf8" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">₹${lastClose.toFixed(1)}</text>
-    </g>
-  `;
-
+  // 5. Candlesticks / Line Chart
   let priceSvg = '';
   if (chartDisplayType === 'candle') {
     for (let i = 0; i < n; i++) {
@@ -6032,10 +6265,11 @@ function drawHoldingsSvg() {
       pathD += ` L ${getX(i)} ${getY(history[i].close)}`;
     }
     const areaD = pathD + ` L ${getX(n - 1)} ${padTop + pricePlotH} L ${getX(0)} ${padTop + pricePlotH} Z`;
-    priceSvg += `<path d="${areaD}" fill="url(#chartAreaGrad)" opacity="0.4" />`;
+    priceSvg += `<path d="${areaD}" fill="url(#chartAreaGrad)" opacity="0.35" />`;
     priceSvg += `<path d="${pathD}" fill="none" stroke="#38bdf8" stroke-width="2.2" />`;
   }
 
+  // 6. SMAs
   let smaSvg = '';
   if (showChartSma) {
     let pSma20 = '';
@@ -6050,10 +6284,11 @@ function drawHoldingsSvg() {
         pSma50 += ` ${cmd} ${getX(i)} ${getY(history[i].sma50)}`;
       }
     }
-    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.4" opacity="0.85" />`;
-    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.4" opacity="0.85" />`;
+    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity="0.9" />`;
+    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.5" opacity="0.9" />`;
   }
 
+  // 7. Buy Point Callout (compact, no clipping)
   let buySvg = '';
   const buyIdx = history.findIndex(h => h.date === meta.buy_date);
   if (buyIdx !== -1) {
@@ -6061,39 +6296,123 @@ function drawHoldingsSvg() {
     const buyY = getY(meta.buy_price);
     const candleTop = getY(history[buyIdx].high);
 
-    buySvg = `
-      <line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.8" />
-      <circle cx="${buyX}" cy="${buyY}" r="14" fill="rgba(16, 185, 129, 0.2)" />
-      <circle cx="${buyX}" cy="${buyY}" r="8" fill="rgba(16, 185, 129, 0.4)" />
+    buySvg += `<line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7" />`;
+    buySvg += `<line x1="${buyX}" y1="${buyY}" x2="${rightBorderX}" y2="${buyY}" stroke="#10b981" stroke-width="1" stroke-dasharray="2,3" opacity="0.6" />`;
+    buySvg += `
+      <circle cx="${buyX}" cy="${buyY}" r="10" fill="rgba(16, 185, 129, 0.25)" />
       <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
-      <g transform="translate(${buyX}, ${Math.max(padTop + 10, candleTop - 45)})">
-        <polygon points="0,35 -6,27 6,27" fill="#059669" />
-        <rect x="-75" y="0" width="150" height="28" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="1.5" filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.6))" />
-        <text x="0" y="14" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+    `;
+
+    const calloutW = 126;
+    const calloutH = 26;
+    const calloutX = Math.max(padLeft + calloutW / 2 + 2, Math.min(rightBorderX - calloutW / 2 - 4, buyX));
+    const calloutY = Math.max(padTop + 4, candleTop - 34);
+
+    buySvg += `
+      <g>
+        <polygon points="${buyX},${calloutY + calloutH} ${buyX - 5},${calloutY + calloutH - 5} ${buyX + 5},${calloutY + calloutH - 5}" fill="#059669" />
+        <rect x="${calloutX - calloutW / 2}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="#064e3b" stroke="#10b981" stroke-width="1.2" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.5))" />
+        <text x="${calloutX}" y="${calloutY + 11}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">
           BOUGHT @ ₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 1})}
         </text>
-        <text x="0" y="24" fill="#6ee7b7" font-size="8" font-weight="bold" text-anchor="middle" font-family="sans-serif">
-          ${meta.buy_date} · ${meta.qty || 1} SHARES
+        <text x="${calloutX}" y="${calloutY + 20}" fill="#a7f3d0" font-size="7.5" font-weight="600" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+          ${meta.buy_date.slice(5)} · ${meta.qty || 1} SHARES
         </text>
       </g>
     `;
   }
 
+  // 8. Dedicated Right Axis Price Badges (Zero Overlap with Candles)
+  const lastClose = history[n - 1].close;
+  const lastY = getY(lastClose);
+
+  // Horizontal guide lines across plot
+  let linesSvg = `
+    <line x1="${padLeft}" y1="${lastY}" x2="${rightBorderX}" y2="${lastY}" stroke="#38bdf8" stroke-width="1.4" stroke-dasharray="2,3" />
+  `;
+  if (softStop) {
+    const ssY = getY(softStop);
+    linesSvg += `<line x1="${padLeft}" y1="${ssY}" x2="${rightBorderX}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="4,4" />`;
+  }
+  if (floorStop) {
+    const slY = getY(floorStop);
+    linesSvg += `<line x1="${padLeft}" y1="${slY}" x2="${rightBorderX}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" />`;
+  }
+  if (meta.buy_price) {
+    const bY = getY(meta.buy_price);
+    linesSvg += `<line x1="${padLeft}" y1="${bY}" x2="${rightBorderX}" y2="${bY}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.65" />`;
+  }
+
+  // Badges array for anti-collision resolution
+  const badges = [];
+  badges.push({
+    y: lastY,
+    text: `₹${lastClose.toFixed(1)} · LAST`,
+    fill: '#0284c7',
+    stroke: '#38bdf8',
+    textColor: '#ffffff',
+    isLast: true
+  });
+  if (softStop) {
+    badges.push({
+      y: getY(softStop),
+      text: `AI STOP ₹${softStop.toFixed(1)}`,
+      fill: 'rgba(180, 83, 9, 0.95)',
+      stroke: '#fbbf24',
+      textColor: '#ffffff'
+    });
+  }
+  if (floorStop) {
+    badges.push({
+      y: getY(floorStop),
+      text: `FLOOR ₹${floorStop.toFixed(1)}`,
+      fill: 'rgba(185, 28, 28, 0.95)',
+      stroke: '#f87171',
+      textColor: '#ffffff'
+    });
+  }
+  if (meta.buy_price) {
+    badges.push({
+      y: getY(meta.buy_price),
+      text: `BUY ₹${meta.buy_price.toFixed(1)}`,
+      fill: '#064e3b',
+      stroke: '#10b981',
+      textColor: '#6ee7b7'
+    });
+  }
+
+  const axisBadgesSvg = renderAxisBadges(badges, rightBorderX, padTop, volumeTop + volumeHeight);
+
+  // 9. Interactive Crosshair Elements
+  const crosshairSvg = `
+    <g id="holdingsCrosshairG" style="display:none;pointer-events:none">
+      <line id="holdingsCrossX" y1="${padTop}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
+      <line id="holdingsCrossY" x1="${padLeft}" x2="${rightBorderX}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
+      <rect id="holdingsCrossTagY" x="${rightBorderX + 4}" width="72" height="18" rx="3" fill="#334155" />
+      <text id="holdingsCrossTagYText" x="${rightBorderX + 40}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace"></text>
+    </g>
+  `;
+
   svg.innerHTML = `
     <defs>
       <linearGradient id="chartAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/>
+        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5"/>
         <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
       </linearGradient>
     </defs>
+    ${bgSvg}
+    ${zonesSvg}
     ${gridSvg}
     ${volSvg}
-    ${levelsSvg}
+    ${linesSvg}
     ${priceSvg}
     ${smaSvg}
     ${buySvg}
+    ${axisBadgesSvg}
+    ${crosshairSvg}
   `;
 
+  // 10. Container Mouse Interaction
   const container = svg.parentElement;
   const tooltip = document.getElementById('chartTooltip');
   if (!container || !tooltip) return;
@@ -6102,9 +6421,12 @@ function drawHoldingsSvg() {
     const rect = svg.getBoundingClientRect();
     const scaleX = 960 / rect.width;
     const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * (500 / rect.height);
 
-    if (mouseX < padLeft || mouseX > W - padRight) {
+    if (mouseX < padLeft || mouseX > rightBorderX) {
       tooltip.style.display = 'none';
+      const cross = document.getElementById('holdingsCrosshairG');
+      if (cross) cross.style.display = 'none';
       return;
     }
 
@@ -6112,39 +6434,73 @@ function drawHoldingsSvg() {
     const item = history[idx];
     if (!item) return;
 
+    const candleX = getX(idx);
+    const cross = document.getElementById('holdingsCrosshairG');
+    if (cross) {
+      cross.style.display = 'block';
+      const lineX = document.getElementById('holdingsCrossX');
+      const lineY = document.getElementById('holdingsCrossY');
+      const tagY = document.getElementById('holdingsCrossTagY');
+      const tagTextY = document.getElementById('holdingsCrossTagYText');
+      if (lineX) { lineX.setAttribute('x1', candleX); lineX.setAttribute('x2', candleX); }
+      if (lineY) { lineY.setAttribute('y1', mouseY); lineY.setAttribute('y2', mouseY); }
+      if (tagY && tagTextY) {
+        const hoverP = minP + ((padTop + pricePlotH - mouseY) / pricePlotH) * (maxP - minP);
+        tagY.setAttribute('y', mouseY - 9);
+        tagTextY.setAttribute('y', mouseY + 3.5);
+        tagTextY.textContent = '₹' + hoverP.toFixed(1);
+      }
+    }
+
     const diffFromBuy = meta.buy_price ? ((item.close / meta.buy_price - 1) * 100).toFixed(2) : '0.00';
     const sign = diffFromBuy >= 0 ? '+' : '';
-    const diffColor = diffFromBuy >= 0 ? '#34d399' : '#f87171';
+    const diffColor = diffFromBuy >= 0 ? '#10b981' : '#ef4444';
     const isBuyDay = item.date === meta.buy_date;
+
+    const distToSoft = softStop ? (((item.close / softStop) - 1) * 100).toFixed(2) : null;
+    const distToFloor = floorStop ? (((item.close / floorStop) - 1) * 100).toFixed(2) : null;
+
     const isLightNow = document.body.classList.contains('light-theme');
-    const titleCol = isLightNow ? '#0f172a' : '#fff';
+    const titleCol = isLightNow ? '#0f172a' : '#ffffff';
     const subCol = isLightNow ? '#64748b' : '#94a3b8';
     const borderCol = isLightNow ? '#e2e8f0' : '#334155';
 
     tooltip.style.display = 'block';
-    tooltip.style.left = `${Math.min(rect.width - 200, Math.max(10, e.clientX - rect.left - 90))}px`;
+    tooltip.style.left = `${Math.min(rect.width - 240, Math.max(10, e.clientX - rect.left - 100))}px`;
     tooltip.style.top = `15px`;
 
     tooltip.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid ${borderCol}">
-        <span class="mono" style="font-weight:700;color:${titleCol}">${item.date}</span>
-        ${isBuyDay ? '<span class="pill pill-live" style="font-size:9px;padding:1px 5px">BUY POINT</span>' : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:5px;margin-bottom:6px;border-bottom:1px solid ${borderCol}">
+        <span class="mono" style="font-weight:700;color:${titleCol};font-size:12px">${item.date}</span>
+        ${isBuyDay ? '<span class="pill pill-live" style="font-size:9px;padding:2px 6px">BUY ENTRY POINT</span>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-family:'JetBrains Mono',monospace;font-size:11px">
         <div><span style="color:${subCol}">Open:</span> ₹${item.open.toFixed(1)}</div>
         <div><span style="color:${subCol}">Close:</span> <strong style="color:${titleCol}">₹${item.close.toFixed(1)}</strong></div>
         <div><span style="color:${subCol}">High:</span> ₹${item.high.toFixed(1)}</div>
         <div><span style="color:${subCol}">Low:</span> ₹${item.low.toFixed(1)}</div>
-        <div style="grid-column:span 2;color:${subCol};padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
+        <div style="grid-column:span 2;color:${subCol}">Vol: ${(item.volume / 1000).toLocaleString('en-IN', {maximumFractionDigits: 1})}k shares</div>
         <div style="grid-column:span 2;padding-top:4px;border-top:1px solid ${borderCol};font-size:10.5px">
-          vs Buy: <span style="color:${diffColor};font-weight:700">${sign}${diffFromBuy}%</span>
+          vs Buy (₹${(meta.buy_price || 0).toFixed(1)}): <strong style="color:${diffColor}">${sign}${diffFromBuy}%</strong>
         </div>
+        ${distToSoft !== null ? `
+          <div style="grid-column:span 2;font-size:10px;color:#f59e0b">
+            Cushion to AI Soft Stop (-4%): <strong>${distToSoft >= 0 ? '+' : ''}${distToSoft}%</strong>
+          </div>
+        ` : ''}
+        ${distToFloor !== null ? `
+          <div style="grid-column:span 2;font-size:10px;color:#ef4444">
+            Cushion to Floor Stop (-7%): <strong>${distToFloor >= 0 ? '+' : ''}${distToFloor}%</strong>
+          </div>
+        ` : ''}
       </div>
     `;
   };
 
   container.onmouseleave = function() {
     tooltip.style.display = 'none';
+    const cross = document.getElementById('holdingsCrosshairG');
+    if (cross) cross.style.display = 'none';
   };
 }
 
