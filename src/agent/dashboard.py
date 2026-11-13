@@ -3664,6 +3664,23 @@ body.light-theme .chart-btn-sma {
   border-color: #cbd5e1;
   color: #334155;
 }
+body.light-theme .chart-canvas-wrap {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+body.light-theme .chart-tooltip-box {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  color: #0f172a;
+}
+body.light-theme .chart-instruction-text {
+  color: #64748b;
+}
+body.light-theme .legend-item {
+  color: #475569;
+}
 body.light-theme .us-anchor-card {
   background: #ffffff;
   border-color: #e2e8f0;
@@ -5600,13 +5617,21 @@ function drawPaperSvg() {
   const getVolY = v => volumeTop + volumeHeight - (v / maxVol) * volumeHeight;
 
   const isLight = document.body.classList.contains('light-theme');
+  const plotBg = isLight ? '#ffffff' : '#080d1a';
   const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
   const gridText = '#64748b';
   const axisStroke = isLight ? '#cbd5e1' : '#334155';
-  const rightColBg = isLight ? 'rgba(248, 250, 252, 0.9)' : 'rgba(15, 23, 42, 0.65)';
+  const rightColBg = isLight ? '#f8fafc' : 'rgba(15, 23, 42, 0.65)';
+  const candleUp = isLight ? '#059669' : '#10b981';
+  const candleDown = isLight ? '#dc2626' : '#ef4444';
+  const sma20Stroke = isLight ? '#d97706' : '#fbbf24';
+  const sma50Stroke = isLight ? '#7c3aed' : '#c084fc';
+  const lineStroke = isLight ? '#0284c7' : '#38bdf8';
+  const crosshairTagBg = isLight ? '#1e293b' : '#334155';
 
-  // 1. Right Column & Axis Background
+  // 1. Full Canvas & Right Column Axis Background
   let bgSvg = `
+    <rect x="0" y="0" width="${W}" height="${H}" fill="${plotBg}" rx="8" />
     <rect x="${rightBorderX}" y="${padTop - 12}" width="${padRight}" height="${H - padBottom - padTop + 22}" fill="${rightColBg}" />
     <line x1="${rightBorderX}" y1="${padTop - 12}" x2="${rightBorderX}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" />
   `;
@@ -5617,20 +5642,25 @@ function drawPaperSvg() {
     const topZoneY = Math.min(getY(floorStop), getY(softStop));
     const botZoneY = Math.max(getY(floorStop), getY(softStop));
     const zoneH = botZoneY - topZoneY;
+    const zoneFill = isLight ? 'rgba(239, 68, 68, 0.06)' : 'rgba(239, 68, 68, 0.07)';
+    const zoneTopLine = isLight ? 'rgba(217, 119, 6, 0.55)' : 'rgba(245, 158, 11, 0.45)';
+    const zoneBotLine = isLight ? 'rgba(220, 38, 38, 0.55)' : 'rgba(239, 68, 68, 0.45)';
+    const zoneLabelCol = isLight ? '#b45309' : '#f59e0b';
     zonesSvg += `
-      <g opacity="0.75">
-        <rect x="${padLeft}" y="${topZoneY}" width="${rightBorderX - padLeft}" height="${zoneH}" fill="rgba(239, 68, 68, 0.07)" />
-        <line x1="${padLeft}" y1="${topZoneY}" x2="${rightBorderX}" y2="${topZoneY}" stroke="rgba(245, 158, 11, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
-        <line x1="${padLeft}" y1="${botZoneY}" x2="${rightBorderX}" y2="${botZoneY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
-        <text x="${padLeft + 8}" y="${topZoneY + 12}" fill="#f59e0b" font-size="8.5" font-weight="700" font-family="'JetBrains Mono', monospace" letter-spacing="0.5">DEFENSE / EVALUATION ZONE (-4% to -7%)</text>
+      <g opacity="0.85">
+        <rect x="${padLeft}" y="${topZoneY}" width="${rightBorderX - padLeft}" height="${zoneH}" fill="${zoneFill}" />
+        <line x1="${padLeft}" y1="${topZoneY}" x2="${rightBorderX}" y2="${topZoneY}" stroke="${zoneTopLine}" stroke-width="0.8" stroke-dasharray="2,3" />
+        <line x1="${padLeft}" y1="${botZoneY}" x2="${rightBorderX}" y2="${botZoneY}" stroke="${zoneBotLine}" stroke-width="0.8" stroke-dasharray="2,3" />
+        <text x="${padLeft + 8}" y="${topZoneY + 12}" fill="${zoneLabelCol}" font-size="8.5" font-weight="700" font-family="'JetBrains Mono', monospace" letter-spacing="0.5">DEFENSE / EVALUATION ZONE (-4% to -7%)</text>
       </g>
     `;
   }
   if (meta.buy_price) {
     const bY = getY(meta.buy_price);
     if (bY > padTop) {
+      const runFill = isLight ? 'rgba(56, 189, 248, 0.04)' : 'rgba(56, 189, 248, 0.025)';
       zonesSvg += `
-        <rect x="${padLeft}" y="${padTop}" width="${rightBorderX - padLeft}" height="${bY - padTop}" fill="rgba(56, 189, 248, 0.025)" />
+        <rect x="${padLeft}" y="${padTop}" width="${rightBorderX - padLeft}" height="${bY - padTop}" fill="${runFill}" />
       `;
     }
   }
@@ -5663,7 +5693,9 @@ function drawPaperSvg() {
     const x = getX(i) - candleW / 2;
     const y = getVolY(h.volume);
     const barH = volumeTop + volumeHeight - y;
-    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+    const color = h.close >= h.open
+      ? (isLight ? 'rgba(5, 150, 105, 0.45)' : 'rgba(16, 185, 129, 0.45)')
+      : (isLight ? 'rgba(220, 38, 38, 0.45)' : 'rgba(239, 68, 68, 0.45)');
     volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" rx="0.5" />`;
   }
 
@@ -5678,7 +5710,7 @@ function drawPaperSvg() {
       const yHigh = getY(h.high);
       const yLow = getY(h.low);
       const isUp = h.close >= h.open;
-      const strokeColor = isUp ? '#10b981' : '#ef4444';
+      const strokeColor = isUp ? candleUp : candleDown;
       const topBody = Math.min(yOpen, yClose);
       const bodyH = Math.max(2, Math.abs(yClose - yOpen));
 
@@ -5691,8 +5723,8 @@ function drawPaperSvg() {
       pathD += ` L ${getX(i)} ${getY(history[i].close)}`;
     }
     const areaD = pathD + ` L ${getX(n - 1)} ${padTop + pricePlotH} L ${getX(0)} ${padTop + pricePlotH} Z`;
-    priceSvg += `<path d="${areaD}" fill="url(#paperChartAreaGrad)" opacity="0.35" />`;
-    priceSvg += `<path d="${pathD}" fill="none" stroke="#38bdf8" stroke-width="2.2" />`;
+    priceSvg += `<path d="${areaD}" fill="url(#paperChartAreaGrad)" opacity="${isLight ? '0.2' : '0.35'}" />`;
+    priceSvg += `<path d="${pathD}" fill="none" stroke="${lineStroke}" stroke-width="2.2" />`;
   }
 
   // 6. SMAs
@@ -5710,8 +5742,8 @@ function drawPaperSvg() {
         pSma50 += ` ${cmd} ${getX(i)} ${getY(history[i].sma50)}`;
       }
     }
-    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity="0.9" />`;
-    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.5" opacity="0.9" />`;
+    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="${sma20Stroke}" stroke-width="1.5" opacity="0.9" />`;
+    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="${sma50Stroke}" stroke-width="1.5" opacity="0.9" />`;
   }
 
   // 7. Paper Buy Point Callout (compact, no clipping)
@@ -5722,26 +5754,29 @@ function drawPaperSvg() {
     const buyY = getY(meta.buy_price);
     const candleTop = getY(history[buyIdx].high);
 
-    buySvg += `<line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7" />`;
-    buySvg += `<line x1="${buyX}" y1="${buyY}" x2="${rightBorderX}" y2="${buyY}" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,3" opacity="0.6" />`;
+    const calloutPointCol = isLight ? '#0284c7' : '#38bdf8';
+    buySvg += `<line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="${calloutPointCol}" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7" />`;
+    buySvg += `<line x1="${buyX}" y1="${buyY}" x2="${rightBorderX}" y2="${buyY}" stroke="${calloutPointCol}" stroke-width="1" stroke-dasharray="2,3" opacity="0.6" />`;
     buySvg += `
-      <circle cx="${buyX}" cy="${buyY}" r="10" fill="rgba(56, 189, 248, 0.25)" />
-      <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+      <circle cx="${buyX}" cy="${buyY}" r="10" fill="${isLight ? 'rgba(2, 132, 199, 0.15)' : 'rgba(56, 189, 248, 0.25)'}" />
+      <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="${calloutPointCol}" stroke="#ffffff" stroke-width="1.5" />
     `;
 
     const calloutW = 126;
     const calloutH = 26;
     const calloutX = Math.max(padLeft + calloutW / 2 + 2, Math.min(rightBorderX - calloutW / 2 - 4, buyX));
     const calloutY = Math.max(padTop + 4, candleTop - 34);
+    const calloutFill = isLight ? '#0369a1' : '#0c4a6e';
+    const calloutStroke = isLight ? '#0284c7' : '#38bdf8';
 
     buySvg += `
       <g>
-        <polygon points="${buyX},${calloutY + calloutH} ${buyX - 5},${calloutY + calloutH - 5} ${buyX + 5},${calloutY + calloutH - 5}" fill="#0284c7" />
-        <rect x="${calloutX - calloutW / 2}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.2" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.5))" />
+        <polygon points="${buyX},${calloutY + calloutH} ${buyX - 5},${calloutY + calloutH - 5} ${buyX + 5},${calloutY + calloutH - 5}" fill="${calloutStroke}" />
+        <rect x="${calloutX - calloutW / 2}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="${calloutFill}" stroke="${calloutStroke}" stroke-width="1.2" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.35))" />
         <text x="${calloutX}" y="${calloutY + 11}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">
           PAPER @ ₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 1})}
         </text>
-        <text x="${calloutX}" y="${calloutY + 20}" fill="#7dd3fc" font-size="7.5" font-weight="600" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+        <text x="${calloutX}" y="${calloutY + 20}" fill="#bae6fd" font-size="7.5" font-weight="600" text-anchor="middle" font-family="'JetBrains Mono', monospace">
           ${meta.buy_date.slice(5)} · ${meta.qty || 1} SHARES
         </text>
       </g>
@@ -5753,19 +5788,19 @@ function drawPaperSvg() {
   const lastY = getY(lastClose);
 
   let linesSvg = `
-    <line x1="${padLeft}" y1="${lastY}" x2="${rightBorderX}" y2="${lastY}" stroke="#38bdf8" stroke-width="1.4" stroke-dasharray="2,3" />
+    <line x1="${padLeft}" y1="${lastY}" x2="${rightBorderX}" y2="${lastY}" stroke="${lineStroke}" stroke-width="1.4" stroke-dasharray="2,3" />
   `;
   if (softStop) {
     const ssY = getY(softStop);
-    linesSvg += `<line x1="${padLeft}" y1="${ssY}" x2="${rightBorderX}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="4,4" />`;
+    linesSvg += `<line x1="${padLeft}" y1="${ssY}" x2="${rightBorderX}" y2="${ssY}" stroke="${isLight ? '#d97706' : '#f59e0b'}" stroke-width="1.4" stroke-dasharray="4,4" />`;
   }
   if (floorStop) {
     const slY = getY(floorStop);
-    linesSvg += `<line x1="${padLeft}" y1="${slY}" x2="${rightBorderX}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" />`;
+    linesSvg += `<line x1="${padLeft}" y1="${slY}" x2="${rightBorderX}" y2="${slY}" stroke="${isLight ? '#dc2626' : '#ef4444'}" stroke-width="1.5" stroke-dasharray="4,4" />`;
   }
   if (meta.buy_price) {
     const bY = getY(meta.buy_price);
-    linesSvg += `<line x1="${padLeft}" y1="${bY}" x2="${rightBorderX}" y2="${bY}" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.65" />`;
+    linesSvg += `<line x1="${padLeft}" y1="${bY}" x2="${rightBorderX}" y2="${bY}" stroke="${lineStroke}" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.65" />`;
   }
 
   const badges = [];
@@ -5773,7 +5808,7 @@ function drawPaperSvg() {
     y: lastY,
     text: `₹${lastClose.toFixed(1)} · LAST`,
     fill: '#0284c7',
-    stroke: '#38bdf8',
+    stroke: isLight ? '#0369a1' : '#38bdf8',
     textColor: '#ffffff',
     isLast: true
   });
@@ -5781,8 +5816,8 @@ function drawPaperSvg() {
     badges.push({
       y: getY(softStop),
       text: `AI STOP ₹${softStop.toFixed(1)}`,
-      fill: 'rgba(180, 83, 9, 0.95)',
-      stroke: '#fbbf24',
+      fill: isLight ? '#d97706' : 'rgba(180, 83, 9, 0.95)',
+      stroke: isLight ? '#b45309' : '#fbbf24',
       textColor: '#ffffff'
     });
   }
@@ -5790,8 +5825,8 @@ function drawPaperSvg() {
     badges.push({
       y: getY(floorStop),
       text: `FLOOR ₹${floorStop.toFixed(1)}`,
-      fill: 'rgba(185, 28, 28, 0.95)',
-      stroke: '#f87171',
+      fill: isLight ? '#dc2626' : 'rgba(185, 28, 28, 0.95)',
+      stroke: isLight ? '#b91c1c' : '#f87171',
       textColor: '#ffffff'
     });
   }
@@ -5799,9 +5834,9 @@ function drawPaperSvg() {
     badges.push({
       y: getY(meta.buy_price),
       text: `PAPER ₹${meta.buy_price.toFixed(1)}`,
-      fill: '#0c4a6e',
-      stroke: '#38bdf8',
-      textColor: '#7dd3fc'
+      fill: isLight ? '#0369a1' : '#0c4a6e',
+      stroke: isLight ? '#0284c7' : '#38bdf8',
+      textColor: '#ffffff'
     });
   }
 
@@ -5812,16 +5847,17 @@ function drawPaperSvg() {
     <g id="paperCrosshairG" style="display:none;pointer-events:none">
       <line id="paperCrossX" y1="${padTop}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
       <line id="paperCrossY" x1="${padLeft}" x2="${rightBorderX}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
-      <rect id="paperCrossTagY" x="${rightBorderX + 4}" width="72" height="18" rx="3" fill="#334155" />
+      <rect id="paperCrossTagY" x="${rightBorderX + 4}" width="72" height="18" rx="3" fill="${crosshairTagBg}" />
       <text id="paperCrossTagYText" x="${rightBorderX + 40}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace"></text>
     </g>
   `;
 
+  const gradColor = isLight ? '#0284c7' : '#38bdf8';
   svg.innerHTML = `
     <defs>
       <linearGradient id="paperChartAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5"/>
-        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+        <stop offset="0%" stop-color="${gradColor}" stop-opacity="${isLight ? '0.25' : '0.5'}"/>
+        <stop offset="100%" stop-color="${gradColor}" stop-opacity="0.0"/>
       </linearGradient>
     </defs>
     ${bgSvg}
@@ -5878,7 +5914,7 @@ function drawPaperSvg() {
 
     const diffFromBuy = meta.buy_price ? ((item.close / meta.buy_price - 1) * 100).toFixed(2) : '0.00';
     const sign = diffFromBuy >= 0 ? '+' : '';
-    const diffColor = diffFromBuy >= 0 ? '#10b981' : '#ef4444';
+    const diffColor = diffFromBuy >= 0 ? (isLight ? '#059669' : '#10b981') : (isLight ? '#dc2626' : '#ef4444');
     const isBuyDay = item.date === meta.buy_date;
 
     const distToSoft = softStop ? (((item.close / softStop) - 1) * 100).toFixed(2) : null;
@@ -5908,12 +5944,12 @@ function drawPaperSvg() {
           vs Paper Entry (₹${(meta.buy_price || 0).toFixed(1)}): <strong style="color:${diffColor}">${sign}${diffFromBuy}%</strong>
         </div>
         ${distToSoft !== null ? `
-          <div style="grid-column:span 2;font-size:10px;color:#f59e0b">
+          <div style="grid-column:span 2;font-size:10px;color:${isLightNow ? '#b45309' : '#f59e0b'}">
             Cushion to AI Soft Stop (-4%): <strong>${distToSoft >= 0 ? '+' : ''}${distToSoft}%</strong>
           </div>
         ` : ''}
         ${distToFloor !== null ? `
-          <div style="grid-column:span 2;font-size:10px;color:#ef4444">
+          <div style="grid-column:span 2;font-size:10px;color:${isLightNow ? '#dc2626' : '#ef4444'}">
             Cushion to Floor Stop (-7%): <strong>${distToFloor >= 0 ? '+' : ''}${distToFloor}%</strong>
           </div>
         ` : ''}
@@ -6136,7 +6172,7 @@ function drawHoldingsSvg() {
   const W = 960;
   const H = 500;
   const padLeft = 32;
-  const padRight = 125; // Dedicated right price scale column!
+  const padRight = 125; // Dedicated right price scale column
   const padTop = 32;
   const padBottom = 60;
   const volumeHeight = 60;
@@ -6174,13 +6210,21 @@ function drawHoldingsSvg() {
   const getVolY = v => volumeTop + volumeHeight - (v / maxVol) * volumeHeight;
 
   const isLight = document.body.classList.contains('light-theme');
+  const plotBg = isLight ? '#ffffff' : '#080d1a';
   const gridStroke = isLight ? '#e2e8f0' : '#1e293b';
   const gridText = '#64748b';
   const axisStroke = isLight ? '#cbd5e1' : '#334155';
-  const rightColBg = isLight ? 'rgba(248, 250, 252, 0.9)' : 'rgba(15, 23, 42, 0.65)';
+  const rightColBg = isLight ? '#f8fafc' : 'rgba(15, 23, 42, 0.65)';
+  const candleUp = isLight ? '#059669' : '#10b981';
+  const candleDown = isLight ? '#dc2626' : '#ef4444';
+  const sma20Stroke = isLight ? '#d97706' : '#fbbf24';
+  const sma50Stroke = isLight ? '#7c3aed' : '#c084fc';
+  const lineStroke = isLight ? '#0284c7' : '#38bdf8';
+  const crosshairTagBg = isLight ? '#1e293b' : '#334155';
 
-  // 1. Right Column & Axis Background
+  // 1. Full Canvas & Right Column Axis Background
   let bgSvg = `
+    <rect x="0" y="0" width="${W}" height="${H}" fill="${plotBg}" rx="8" />
     <rect x="${rightBorderX}" y="${padTop - 12}" width="${padRight}" height="${H - padBottom - padTop + 22}" fill="${rightColBg}" />
     <line x1="${rightBorderX}" y1="${padTop - 12}" x2="${rightBorderX}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" />
   `;
@@ -6191,20 +6235,25 @@ function drawHoldingsSvg() {
     const topZoneY = Math.min(getY(floorStop), getY(softStop));
     const botZoneY = Math.max(getY(floorStop), getY(softStop));
     const zoneH = botZoneY - topZoneY;
+    const zoneFill = isLight ? 'rgba(239, 68, 68, 0.06)' : 'rgba(239, 68, 68, 0.07)';
+    const zoneTopLine = isLight ? 'rgba(217, 119, 6, 0.55)' : 'rgba(245, 158, 11, 0.45)';
+    const zoneBotLine = isLight ? 'rgba(220, 38, 38, 0.55)' : 'rgba(239, 68, 68, 0.45)';
+    const zoneLabelCol = isLight ? '#b45309' : '#f59e0b';
     zonesSvg += `
-      <g opacity="0.75">
-        <rect x="${padLeft}" y="${topZoneY}" width="${rightBorderX - padLeft}" height="${zoneH}" fill="rgba(239, 68, 68, 0.07)" />
-        <line x1="${padLeft}" y1="${topZoneY}" x2="${rightBorderX}" y2="${topZoneY}" stroke="rgba(245, 158, 11, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
-        <line x1="${padLeft}" y1="${botZoneY}" x2="${rightBorderX}" y2="${botZoneY}" stroke="rgba(239, 68, 68, 0.45)" stroke-width="0.8" stroke-dasharray="2,3" />
-        <text x="${padLeft + 8}" y="${topZoneY + 12}" fill="#f59e0b" font-size="8.5" font-weight="700" font-family="'JetBrains Mono', monospace" letter-spacing="0.5">DEFENSE / EVALUATION ZONE (-4% to -7%)</text>
+      <g opacity="0.85">
+        <rect x="${padLeft}" y="${topZoneY}" width="${rightBorderX - padLeft}" height="${zoneH}" fill="${zoneFill}" />
+        <line x1="${padLeft}" y1="${topZoneY}" x2="${rightBorderX}" y2="${topZoneY}" stroke="${zoneTopLine}" stroke-width="0.8" stroke-dasharray="2,3" />
+        <line x1="${padLeft}" y1="${botZoneY}" x2="${rightBorderX}" y2="${botZoneY}" stroke="${zoneBotLine}" stroke-width="0.8" stroke-dasharray="2,3" />
+        <text x="${padLeft + 8}" y="${topZoneY + 12}" fill="${zoneLabelCol}" font-size="8.5" font-weight="700" font-family="'JetBrains Mono', monospace" letter-spacing="0.5">DEFENSE / EVALUATION ZONE (-4% to -7%)</text>
       </g>
     `;
   }
   if (meta.buy_price) {
     const bY = getY(meta.buy_price);
     if (bY > padTop) {
+      const runFill = isLight ? 'rgba(16, 185, 129, 0.04)' : 'rgba(16, 185, 129, 0.025)';
       zonesSvg += `
-        <rect x="${padLeft}" y="${padTop}" width="${rightBorderX - padLeft}" height="${bY - padTop}" fill="rgba(16, 185, 129, 0.025)" />
+        <rect x="${padLeft}" y="${padTop}" width="${rightBorderX - padLeft}" height="${bY - padTop}" fill="${runFill}" />
       `;
     }
   }
@@ -6237,7 +6286,9 @@ function drawHoldingsSvg() {
     const x = getX(i) - candleW / 2;
     const y = getVolY(h.volume);
     const barH = volumeTop + volumeHeight - y;
-    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+    const color = h.close >= h.open
+      ? (isLight ? 'rgba(5, 150, 105, 0.45)' : 'rgba(16, 185, 129, 0.45)')
+      : (isLight ? 'rgba(220, 38, 38, 0.45)' : 'rgba(239, 68, 68, 0.45)');
     volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" rx="0.5" />`;
   }
 
@@ -6252,7 +6303,7 @@ function drawHoldingsSvg() {
       const yHigh = getY(h.high);
       const yLow = getY(h.low);
       const isUp = h.close >= h.open;
-      const strokeColor = isUp ? '#10b981' : '#ef4444';
+      const strokeColor = isUp ? candleUp : candleDown;
       const topBody = Math.min(yOpen, yClose);
       const bodyH = Math.max(2, Math.abs(yClose - yOpen));
 
@@ -6265,8 +6316,8 @@ function drawHoldingsSvg() {
       pathD += ` L ${getX(i)} ${getY(history[i].close)}`;
     }
     const areaD = pathD + ` L ${getX(n - 1)} ${padTop + pricePlotH} L ${getX(0)} ${padTop + pricePlotH} Z`;
-    priceSvg += `<path d="${areaD}" fill="url(#chartAreaGrad)" opacity="0.35" />`;
-    priceSvg += `<path d="${pathD}" fill="none" stroke="#38bdf8" stroke-width="2.2" />`;
+    priceSvg += `<path d="${areaD}" fill="url(#chartAreaGrad)" opacity="${isLight ? '0.2' : '0.35'}" />`;
+    priceSvg += `<path d="${pathD}" fill="none" stroke="${lineStroke}" stroke-width="2.2" />`;
   }
 
   // 6. SMAs
@@ -6284,8 +6335,8 @@ function drawHoldingsSvg() {
         pSma50 += ` ${cmd} ${getX(i)} ${getY(history[i].sma50)}`;
       }
     }
-    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.5" opacity="0.9" />`;
-    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.5" opacity="0.9" />`;
+    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="${sma20Stroke}" stroke-width="1.5" opacity="0.9" />`;
+    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="${sma50Stroke}" stroke-width="1.5" opacity="0.9" />`;
   }
 
   // 7. Buy Point Callout (compact, no clipping)
@@ -6296,22 +6347,25 @@ function drawHoldingsSvg() {
     const buyY = getY(meta.buy_price);
     const candleTop = getY(history[buyIdx].high);
 
-    buySvg += `<line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7" />`;
-    buySvg += `<line x1="${buyX}" y1="${buyY}" x2="${rightBorderX}" y2="${buyY}" stroke="#10b981" stroke-width="1" stroke-dasharray="2,3" opacity="0.6" />`;
+    const calloutPointCol = isLight ? '#059669' : '#10b981';
+    buySvg += `<line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="${calloutPointCol}" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7" />`;
+    buySvg += `<line x1="${buyX}" y1="${buyY}" x2="${rightBorderX}" y2="${buyY}" stroke="${calloutPointCol}" stroke-width="1" stroke-dasharray="2,3" opacity="0.6" />`;
     buySvg += `
-      <circle cx="${buyX}" cy="${buyY}" r="10" fill="rgba(16, 185, 129, 0.25)" />
-      <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+      <circle cx="${buyX}" cy="${buyY}" r="10" fill="${isLight ? 'rgba(5, 150, 105, 0.15)' : 'rgba(16, 185, 129, 0.25)'}" />
+      <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="${calloutPointCol}" stroke="#ffffff" stroke-width="1.5" />
     `;
 
     const calloutW = 126;
     const calloutH = 26;
     const calloutX = Math.max(padLeft + calloutW / 2 + 2, Math.min(rightBorderX - calloutW / 2 - 4, buyX));
     const calloutY = Math.max(padTop + 4, candleTop - 34);
+    const calloutFill = isLight ? '#065f46' : '#064e3b';
+    const calloutStroke = isLight ? '#059669' : '#10b981';
 
     buySvg += `
       <g>
-        <polygon points="${buyX},${calloutY + calloutH} ${buyX - 5},${calloutY + calloutH - 5} ${buyX + 5},${calloutY + calloutH - 5}" fill="#059669" />
-        <rect x="${calloutX - calloutW / 2}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="#064e3b" stroke="#10b981" stroke-width="1.2" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.5))" />
+        <polygon points="${buyX},${calloutY + calloutH} ${buyX - 5},${calloutY + calloutH - 5} ${buyX + 5},${calloutY + calloutH - 5}" fill="${calloutStroke}" />
+        <rect x="${calloutX - calloutW / 2}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="${calloutFill}" stroke="${calloutStroke}" stroke-width="1.2" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.35))" />
         <text x="${calloutX}" y="${calloutY + 11}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">
           BOUGHT @ ₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 1})}
         </text>
@@ -6326,30 +6380,28 @@ function drawHoldingsSvg() {
   const lastClose = history[n - 1].close;
   const lastY = getY(lastClose);
 
-  // Horizontal guide lines across plot
   let linesSvg = `
-    <line x1="${padLeft}" y1="${lastY}" x2="${rightBorderX}" y2="${lastY}" stroke="#38bdf8" stroke-width="1.4" stroke-dasharray="2,3" />
+    <line x1="${padLeft}" y1="${lastY}" x2="${rightBorderX}" y2="${lastY}" stroke="${lineStroke}" stroke-width="1.4" stroke-dasharray="2,3" />
   `;
   if (softStop) {
     const ssY = getY(softStop);
-    linesSvg += `<line x1="${padLeft}" y1="${ssY}" x2="${rightBorderX}" y2="${ssY}" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="4,4" />`;
+    linesSvg += `<line x1="${padLeft}" y1="${ssY}" x2="${rightBorderX}" y2="${ssY}" stroke="${isLight ? '#d97706' : '#f59e0b'}" stroke-width="1.4" stroke-dasharray="4,4" />`;
   }
   if (floorStop) {
     const slY = getY(floorStop);
-    linesSvg += `<line x1="${padLeft}" y1="${slY}" x2="${rightBorderX}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" />`;
+    linesSvg += `<line x1="${padLeft}" y1="${slY}" x2="${rightBorderX}" y2="${slY}" stroke="${isLight ? '#dc2626' : '#ef4444'}" stroke-width="1.5" stroke-dasharray="4,4" />`;
   }
   if (meta.buy_price) {
     const bY = getY(meta.buy_price);
-    linesSvg += `<line x1="${padLeft}" y1="${bY}" x2="${rightBorderX}" y2="${bY}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.65" />`;
+    linesSvg += `<line x1="${padLeft}" y1="${bY}" x2="${rightBorderX}" y2="${bY}" stroke="${isLight ? '#059669' : '#10b981'}" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.65" />`;
   }
 
-  // Badges array for anti-collision resolution
   const badges = [];
   badges.push({
     y: lastY,
     text: `₹${lastClose.toFixed(1)} · LAST`,
     fill: '#0284c7',
-    stroke: '#38bdf8',
+    stroke: isLight ? '#0369a1' : '#38bdf8',
     textColor: '#ffffff',
     isLast: true
   });
@@ -6357,8 +6409,8 @@ function drawHoldingsSvg() {
     badges.push({
       y: getY(softStop),
       text: `AI STOP ₹${softStop.toFixed(1)}`,
-      fill: 'rgba(180, 83, 9, 0.95)',
-      stroke: '#fbbf24',
+      fill: isLight ? '#d97706' : 'rgba(180, 83, 9, 0.95)',
+      stroke: isLight ? '#b45309' : '#fbbf24',
       textColor: '#ffffff'
     });
   }
@@ -6366,8 +6418,8 @@ function drawHoldingsSvg() {
     badges.push({
       y: getY(floorStop),
       text: `FLOOR ₹${floorStop.toFixed(1)}`,
-      fill: 'rgba(185, 28, 28, 0.95)',
-      stroke: '#f87171',
+      fill: isLight ? '#dc2626' : 'rgba(185, 28, 28, 0.95)',
+      stroke: isLight ? '#b91c1c' : '#f87171',
       textColor: '#ffffff'
     });
   }
@@ -6375,9 +6427,9 @@ function drawHoldingsSvg() {
     badges.push({
       y: getY(meta.buy_price),
       text: `BUY ₹${meta.buy_price.toFixed(1)}`,
-      fill: '#064e3b',
-      stroke: '#10b981',
-      textColor: '#6ee7b7'
+      fill: isLight ? '#065f46' : '#064e3b',
+      stroke: isLight ? '#059669' : '#10b981',
+      textColor: '#ffffff'
     });
   }
 
@@ -6388,16 +6440,17 @@ function drawHoldingsSvg() {
     <g id="holdingsCrosshairG" style="display:none;pointer-events:none">
       <line id="holdingsCrossX" y1="${padTop}" y2="${volumeTop + volumeHeight}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
       <line id="holdingsCrossY" x1="${padLeft}" x2="${rightBorderX}" stroke="${axisStroke}" stroke-width="1" stroke-dasharray="3,3" opacity="0.75" />
-      <rect id="holdingsCrossTagY" x="${rightBorderX + 4}" width="72" height="18" rx="3" fill="#334155" />
+      <rect id="holdingsCrossTagY" x="${rightBorderX + 4}" width="72" height="18" rx="3" fill="${crosshairTagBg}" />
       <text id="holdingsCrossTagYText" x="${rightBorderX + 40}" fill="#ffffff" font-size="9" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace"></text>
     </g>
   `;
 
+  const gradColor = isLight ? '#0284c7' : '#38bdf8';
   svg.innerHTML = `
     <defs>
       <linearGradient id="chartAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5"/>
-        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+        <stop offset="0%" stop-color="${gradColor}" stop-opacity="${isLight ? '0.25' : '0.5'}"/>
+        <stop offset="100%" stop-color="${gradColor}" stop-opacity="0.0"/>
       </linearGradient>
     </defs>
     ${bgSvg}
@@ -6454,7 +6507,7 @@ function drawHoldingsSvg() {
 
     const diffFromBuy = meta.buy_price ? ((item.close / meta.buy_price - 1) * 100).toFixed(2) : '0.00';
     const sign = diffFromBuy >= 0 ? '+' : '';
-    const diffColor = diffFromBuy >= 0 ? '#10b981' : '#ef4444';
+    const diffColor = diffFromBuy >= 0 ? (isLight ? '#059669' : '#10b981') : (isLight ? '#dc2626' : '#ef4444');
     const isBuyDay = item.date === meta.buy_date;
 
     const distToSoft = softStop ? (((item.close / softStop) - 1) * 100).toFixed(2) : null;
@@ -6484,12 +6537,12 @@ function drawHoldingsSvg() {
           vs Buy (₹${(meta.buy_price || 0).toFixed(1)}): <strong style="color:${diffColor}">${sign}${diffFromBuy}%</strong>
         </div>
         ${distToSoft !== null ? `
-          <div style="grid-column:span 2;font-size:10px;color:#f59e0b">
+          <div style="grid-column:span 2;font-size:10px;color:${isLightNow ? '#b45309' : '#f59e0b'}">
             Cushion to AI Soft Stop (-4%): <strong>${distToSoft >= 0 ? '+' : ''}${distToSoft}%</strong>
           </div>
         ` : ''}
         ${distToFloor !== null ? `
-          <div style="grid-column:span 2;font-size:10px;color:#ef4444">
+          <div style="grid-column:span 2;font-size:10px;color:${isLightNow ? '#dc2626' : '#ef4444'}">
             Cushion to Floor Stop (-7%): <strong>${distToFloor >= 0 ? '+' : ''}${distToFloor}%</strong>
           </div>
         ` : ''}
