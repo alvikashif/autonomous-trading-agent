@@ -4777,11 +4777,15 @@ async function load() {
   // Render Bento KPIs
   const k = document.getElementById('kpis');
   k.replaceChildren();
+  const holdingsPnl = (d.holdings || []).reduce((acc, h) => acc + (h.pnl || 0), 0);
+  const holdingsInvested = d.held_value ? (d.held_value - holdingsPnl) : 0;
+  const holdingsPnlPct = holdingsInvested > 0 ? (holdingsPnl / holdingsInvested) : 0;
+
   const kpiData = [
-    ['Total Equity', inr(d.equity), 'Net liquidation value', ''],
-    ['Liquid Cash', inr(d.cash), 'Available for delivery buys', ''],
-    ['Capital Deposited', inr(d.deposited), 'Total net capital inflow', ''],
-    ['Total P/L', d.pnl == null ? '–' : inr(d.pnl) + ' (' + pct(d.pnl_pct) + ')', 'Unrealized & realized', cls(d.pnl)],
+    ['Total Equity', inr(d.equity), 'Stocks ' + inr(d.held_value) + ' + Cash ' + inr(d.cash), ''],
+    ['Liquid Cash', inr(d.cash), 'Available Groww Demat balance', ''],
+    ['Capital Deposited', inr(d.deposited), 'Total net bank capital inflow', ''],
+    ['Total P/L', d.pnl == null ? '–' : inr(d.pnl) + ' (' + pct(d.pnl_pct) + ')', 'Stocks P/L: ' + inr(holdingsPnl) + ' (' + pct(holdingsPnlPct) + ')', cls(d.pnl)],
     ['Frictional Costs', inr(d.total_costs), 'Brokerage, STT, DP fees', ''],
     ['Next Rebalance', d.next_rebalance || 'Due Now', 'Quarterly cadence', '']
   ];
