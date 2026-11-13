@@ -210,6 +210,21 @@ def _get_us_stocks_summary() -> dict:
     }
 
 
+def _load_holdings_charts() -> dict:
+    """Load historical OHLCV, SMA20/50, and buy point annotations for invested institutions."""
+    for p in ("data/interactive_charts_data_with_sma.json", "data/interactive_charts_data.json"):
+        d = _read_json(p)
+        if d:
+            return d
+    seed_path = Path(__file__).parent / "holdings_charts_seed.json"
+    if seed_path.is_file():
+        try:
+            return json.loads(seed_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
 def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_cache: str,
                   rebalance_months: int, swing_path: str | None = None,
                   kill_switch_path: str | None = None, broker_mode: str = "paper",
@@ -319,6 +334,7 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
         "us_stocks": _get_us_stocks_summary(),
         "api_budget": api_budget,
         "notifications": _get_recent_notifications(),
+        "charts": _load_holdings_charts(),
     }
 
 
@@ -1127,6 +1143,284 @@ label {
   }
 }
 
+/* Holdings Technical Chart Card & Visualizer */
+.chart-stock-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.chart-tab-btn {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink);
+}
+.chart-tab-btn:hover {
+  background: #0f172a;
+  border-color: #334155;
+}
+.chart-tab-btn.active {
+  background: #0f172a;
+  border-color: #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
+}
+.chart-tab-btn.active-live {
+  background: #0f172a;
+  border-color: #10b981;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+}
+.chart-tab-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.chart-tab-sym {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+}
+.chart-tab-name {
+  font-size: 11px;
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chart-tab-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-top: 2px;
+}
+.chart-active-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.chart-title-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chart-symbol-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chart-symbol-text {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.chart-desc-text {
+  font-size: 12px;
+  color: var(--mute);
+}
+.chart-controls-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chart-mode-toggle {
+  display: inline-flex;
+  background: #080d1a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+}
+.chart-btn {
+  background: transparent;
+  border: none;
+  color: var(--mute);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chart-btn.active {
+  background: #1e293b;
+  color: #fff;
+}
+.chart-btn-sma {
+  background: #080d1a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--mute);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chart-btn-sma:hover {
+  border-color: #475569;
+  color: #fff;
+}
+.chart-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.chart-metric-box {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.chart-metric-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin-bottom: 4px;
+}
+.chart-metric-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+.chart-metric-sub {
+  font-size: 10px;
+  color: var(--subtle);
+  margin-top: 2px;
+}
+.chart-legend-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--mute);
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.chart-legend-items {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend-dash {
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed #ef4444;
+  display: inline-block;
+}
+.legend-line {
+  width: 12px;
+  height: 2px;
+  display: inline-block;
+  border-radius: 1px;
+}
+.chart-instruction-text {
+  font-size: 10.5px;
+  color: var(--subtle);
+}
+.chart-canvas-wrap {
+  position: relative;
+  background: #080d1a;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px;
+  overflow: hidden;
+  user-select: none;
+}
+.chart-svg-elem {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.chart-tooltip-box {
+  position: absolute;
+  pointer-events: none;
+  display: none;
+  z-index: 50;
+  background: rgba(11, 18, 34, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  font-size: 11px;
+  color: #e2e8f0;
+  max-width: 240px;
+}
+.chart-audit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: var(--mute);
+}
+.chart-audit-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chart-audit-sync {
+  font-size: 10.5px;
+  color: var(--subtle);
+}
+@media (max-width: 640px) {
+  .chart-stock-tabs {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .chart-metric-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .chart-active-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .chart-symbol-text {
+    font-size: 18px !important;
+  }
+  .chart-metric-val {
+    font-size: 14px !important;
+  }
+}
 
 /* Toast & Notification System */
 .toast-container {
@@ -2514,6 +2808,284 @@ footer {
   }
 }
 
+/* Holdings Technical Chart Card & Visualizer */
+.chart-stock-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.chart-tab-btn {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink);
+}
+.chart-tab-btn:hover {
+  background: #0f172a;
+  border-color: #334155;
+}
+.chart-tab-btn.active {
+  background: #0f172a;
+  border-color: #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
+}
+.chart-tab-btn.active-live {
+  background: #0f172a;
+  border-color: #10b981;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+}
+.chart-tab-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.chart-tab-sym {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+}
+.chart-tab-name {
+  font-size: 11px;
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chart-tab-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-top: 2px;
+}
+.chart-active-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.chart-title-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chart-symbol-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chart-symbol-text {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.chart-desc-text {
+  font-size: 12px;
+  color: var(--mute);
+}
+.chart-controls-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chart-mode-toggle {
+  display: inline-flex;
+  background: #080d1a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+}
+.chart-btn {
+  background: transparent;
+  border: none;
+  color: var(--mute);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chart-btn.active {
+  background: #1e293b;
+  color: #fff;
+}
+.chart-btn-sma {
+  background: #080d1a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--mute);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chart-btn-sma:hover {
+  border-color: #475569;
+  color: #fff;
+}
+.chart-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.chart-metric-box {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.chart-metric-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin-bottom: 4px;
+}
+.chart-metric-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+.chart-metric-sub {
+  font-size: 10px;
+  color: var(--subtle);
+  margin-top: 2px;
+}
+.chart-legend-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--mute);
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.chart-legend-items {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend-dash {
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed #ef4444;
+  display: inline-block;
+}
+.legend-line {
+  width: 12px;
+  height: 2px;
+  display: inline-block;
+  border-radius: 1px;
+}
+.chart-instruction-text {
+  font-size: 10.5px;
+  color: var(--subtle);
+}
+.chart-canvas-wrap {
+  position: relative;
+  background: #080d1a;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px;
+  overflow: hidden;
+  user-select: none;
+}
+.chart-svg-elem {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.chart-tooltip-box {
+  position: absolute;
+  pointer-events: none;
+  display: none;
+  z-index: 50;
+  background: rgba(11, 18, 34, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  font-size: 11px;
+  color: #e2e8f0;
+  max-width: 240px;
+}
+.chart-audit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: var(--mute);
+}
+.chart-audit-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chart-audit-sync {
+  font-size: 10.5px;
+  color: var(--subtle);
+}
+@media (max-width: 640px) {
+  .chart-stock-tabs {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .chart-metric-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .chart-active-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .chart-symbol-text {
+    font-size: 18px !important;
+  }
+  .chart-metric-val {
+    font-size: 14px !important;
+  }
+}
 
 /* Toast & Notification System */
 .toast-container {
@@ -3004,6 +3576,109 @@ footer {
     <div class="card-body">
       <div class="table-wrap">
         <table id="hold"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Holdings Technical Chart & Buy Point Annotation -->
+  <div class="card" id="chartCard">
+    <div class="card-header" onclick="toggleCard('chartCard')">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <span><span class="title-desktop">Invested Institutions: Technical Chart &amp; Entry Points</span><span class="title-mobile">Holdings Charts</span></span>
+      </div>
+      <div class="card-header-actions">
+        <span class="pill" style="background:rgba(16,185,129,0.12);color:#34d399;border-color:rgba(16,185,129,0.3)"><span class="badge-desktop">Buy Point &amp; Floor Stop</span><span class="badge-mobile">Buy &amp; Stop</span></span>
+        <button class="btn-collapse" type="button" aria-label="Toggle section">
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <!-- Stock Selector Tabs -->
+      <div class="chart-stock-tabs" id="chartStockTabs"></div>
+
+      <!-- Active Stock Header & Metrics -->
+      <div class="chart-active-header">
+        <div class="chart-title-cluster">
+          <div class="chart-symbol-row">
+            <span id="chartSymbol" class="chart-symbol-text mono">--</span>
+            <span id="chartBadge" class="pill pill-live">LIVE</span>
+            <span id="chartShariah" class="pill pill-shariah">AAOIFI</span>
+          </div>
+          <div id="chartCompanyDesc" class="chart-desc-text"></div>
+        </div>
+
+        <div class="chart-controls-cluster">
+          <div class="chart-mode-toggle">
+            <button id="btnChartCandle" onclick="setHoldingsChartType('candle')" class="chart-btn active">Candles</button>
+            <button id="btnChartLine" onclick="setHoldingsChartType('line')" class="chart-btn">Line</button>
+          </div>
+          <button id="btnChartSma" onclick="toggleHoldingsSma()" class="chart-btn-sma">
+            SMAs (20/50): <strong id="smaLabel" style="color:#10b981">ON</strong>
+          </button>
+        </div>
+      </div>
+
+      <!-- Metric Grid -->
+      <div class="chart-metric-grid" id="chartMetricGrid">
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Buy Price (Entry)</div>
+          <div id="chartKpiBuy" class="chart-metric-val mono">--</div>
+          <div id="chartKpiBuySub" class="chart-metric-sub">--</div>
+        </div>
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Latest Price</div>
+          <div id="chartKpiLast" class="chart-metric-val mono" style="color:#38bdf8">--</div>
+          <div id="chartKpiLastSub" class="chart-metric-sub">NSE Market Quote</div>
+        </div>
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Return from Entry</div>
+          <div id="chartKpiPnl" class="chart-metric-val mono">--</div>
+          <div id="chartKpiPnlSub" class="chart-metric-sub">Unrealized P/L</div>
+        </div>
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Floor Stop-Loss</div>
+          <div id="chartKpiStop" class="chart-metric-val mono" style="color:#ef4444">--</div>
+          <div id="chartKpiStopSub" class="chart-metric-sub" style="color:rgba(239,68,68,0.85);font-weight:600">--</div>
+        </div>
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Take-Profit Target</div>
+          <div id="chartKpiTarget" class="chart-metric-val mono" style="color:#10b981">--</div>
+          <div class="chart-metric-sub" style="color:rgba(16,185,129,0.85);font-weight:600">+20.0% Max Goal</div>
+        </div>
+        <div class="chart-metric-box">
+          <div class="chart-metric-label">Invested Capital</div>
+          <div id="chartKpiInvested" class="chart-metric-val mono">--</div>
+          <div id="chartKpiInvestedSub" class="chart-metric-sub">--</div>
+        </div>
+      </div>
+
+      <!-- Chart Legend -->
+      <div class="chart-legend-bar">
+        <div class="chart-legend-items">
+          <span class="legend-item"><span class="legend-dot" style="background:#10b981;box-shadow:0 0 6px #10b981"></span> 🟢 Buy Point</span>
+          <span class="legend-item"><span class="legend-dash" style="border-top-color:#ef4444"></span> Stop-Loss (Floor)</span>
+          <span class="legend-item"><span class="legend-dash" style="border-top-color:#10b981"></span> Target (+20%)</span>
+          <span class="legend-item"><span class="legend-line" style="background:#fbbf24"></span> SMA 20</span>
+          <span class="legend-item"><span class="legend-line" style="background:#c084fc"></span> SMA 50</span>
+        </div>
+        <div class="chart-instruction-text">Hover or tap candles for detailed daily OHLCV breakdown</div>
+      </div>
+
+      <!-- SVG Chart Wrapper -->
+      <div class="chart-canvas-wrap">
+        <svg id="holdingsSvgChart" viewBox="0 0 960 500" class="chart-svg-elem"></svg>
+        <div id="chartTooltip" class="chart-tooltip-box"></div>
+      </div>
+
+      <!-- Protection Audit Status Bar -->
+      <div class="chart-audit-bar">
+        <div class="chart-audit-status">
+          <span style="color:#10b981;font-weight:700">🛡️ Execution &amp; Risk Protection:</span>
+          <span id="chartAuditDetail">--</span>
+        </div>
+        <div class="chart-audit-sync mono" id="chartAuditSync">Updated live</div>
       </div>
     </div>
   </div>
@@ -3660,6 +4335,7 @@ async function load() {
       ]))
     ]);
   }
+  renderHoldingsCharts(d.charts, d.monitor);
   renderUSStocks(d.us_stocks);
   updateToggleAllBtn();
 }
@@ -3998,7 +4674,7 @@ if (isIosDevice && !isStandalone && iosHint && !sessionStorage.getItem('ios_hint
 }
 
 const ALL_CARD_IDS = [
-  'kpiCard', 'aicard', 'holdCard', 'swingcard', 'monCard', 'tradesCard',
+  'kpiCard', 'aicard', 'holdCard', 'chartCard', 'swingcard', 'monCard', 'tradesCard',
   'usStrategyCard', 'usTopPickCard', 'usCandidatesCard', 'usExecutionCard'
 ];
 
@@ -4049,6 +4725,411 @@ function renderUSStocks(us) {
       tbody.appendChild(tr);
     });
   }
+}
+
+// Interactive Holdings Technical Chart & Buy Point Annotation
+let holdingsChartsData = {};
+let currentChartSymbol = 'SHYAMMETL';
+let chartDisplayType = 'candle';
+let showChartSma = true;
+
+function renderHoldingsCharts(charts, monitor) {
+  const card = document.getElementById('chartCard');
+  if (!charts || Object.keys(charts).length === 0) {
+    if (card) card.style.display = 'none';
+    return;
+  }
+  if (card) card.style.display = 'block';
+  holdingsChartsData = charts;
+
+  if (!holdingsChartsData[currentChartSymbol]) {
+    currentChartSymbol = Object.keys(holdingsChartsData)[0];
+  }
+
+  const tabsContainer = document.getElementById('chartStockTabs');
+  if (tabsContainer) {
+    tabsContainer.replaceChildren();
+    Object.keys(holdingsChartsData).forEach(sym => {
+      const stock = holdingsChartsData[sym];
+      const meta = stock.meta || {};
+      const history = stock.history || [];
+      const last = history.length ? history[history.length - 1] : null;
+      const isLive = (meta.type || '').includes('LIVE');
+      const isSelected = (sym === currentChartSymbol);
+
+      const btn = document.createElement('button');
+      btn.className = `chart-tab-btn ${isSelected ? (isLive ? 'active active-live' : 'active') : ''}`;
+      btn.onclick = () => selectHoldingsStock(sym);
+
+      const topRow = document.createElement('div');
+      topRow.className = 'chart-tab-top';
+      const symSpan = document.createElement('span');
+      symSpan.className = 'chart-tab-sym mono';
+      symSpan.textContent = sym;
+
+      const badge = document.createElement('span');
+      badge.className = isLive ? 'pill pill-live' : 'pill pill-mode';
+      badge.style.fontSize = '9px';
+      badge.style.padding = '1px 5px';
+      badge.textContent = isLive ? 'LIVE' : 'PAPER';
+
+      topRow.appendChild(symSpan);
+      topRow.appendChild(badge);
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'chart-tab-name';
+      nameDiv.textContent = meta.name || sym;
+
+      const priceDiv = document.createElement('div');
+      priceDiv.className = 'chart-tab-price mono';
+      priceDiv.textContent = last ? `₹${last.close.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 2})}` : '--';
+
+      btn.appendChild(topRow);
+      btn.appendChild(nameDiv);
+      btn.appendChild(priceDiv);
+      tabsContainer.appendChild(btn);
+    });
+  }
+
+  updateActiveStockUI(monitor);
+}
+
+function selectHoldingsStock(sym) {
+  currentChartSymbol = sym;
+  renderHoldingsCharts(holdingsChartsData);
+}
+
+function setHoldingsChartType(type) {
+  chartDisplayType = type;
+  const btnCandle = document.getElementById('btnChartCandle');
+  const btnLine = document.getElementById('btnChartLine');
+  if (btnCandle) btnCandle.className = (type === 'candle') ? 'chart-btn active' : 'chart-btn';
+  if (btnLine) btnLine.className = (type === 'line') ? 'chart-btn active' : 'chart-btn';
+  drawHoldingsSvg();
+}
+
+function toggleHoldingsSma() {
+  showChartSma = !showChartSma;
+  const lbl = document.getElementById('smaLabel');
+  if (lbl) {
+    lbl.textContent = showChartSma ? 'ON' : 'OFF';
+    lbl.style.color = showChartSma ? '#10b981' : 'var(--mute)';
+  }
+  drawHoldingsSvg();
+}
+
+function updateActiveStockUI(monitor) {
+  const stock = holdingsChartsData[currentChartSymbol];
+  if (!stock) return;
+  const meta = stock.meta || {};
+  const history = stock.history || [];
+  if (!history.length) return;
+  const last = history[history.length - 1];
+
+  const symEl = document.getElementById('chartSymbol');
+  if (symEl) symEl.textContent = currentChartSymbol;
+
+  const descEl = document.getElementById('chartCompanyDesc');
+  if (descEl) descEl.textContent = `${meta.name || currentChartSymbol} · ${meta.sector || 'NSE Equities'}`;
+
+  const badgeEl = document.getElementById('chartBadge');
+  const isLive = (meta.type || '').includes('LIVE');
+  if (badgeEl) {
+    badgeEl.textContent = isLive ? 'LIVE GROWW CNC' : 'PAPER SANDBOX';
+    badgeEl.className = isLive ? 'pill pill-live' : 'pill pill-mode';
+  }
+
+  const shariahEl = document.getElementById('chartShariah');
+  if (shariahEl) {
+    shariahEl.textContent = meta.shariah || 'AAOIFI Compliant';
+  }
+
+  const buyEl = document.getElementById('chartKpiBuy');
+  if (buyEl) buyEl.textContent = meta.buy_price ? `₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const buySubEl = document.getElementById('chartKpiBuySub');
+  if (buySubEl) buySubEl.textContent = `${meta.buy_date || '--'} · ${meta.qty || 1} Shares`;
+
+  const lastEl = document.getElementById('chartKpiLast');
+  if (lastEl) lastEl.textContent = `₹${last.close.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+
+  const pnlEl = document.getElementById('chartKpiPnl');
+  if (pnlEl && meta.buy_price) {
+    const pnlAmt = (last.close - meta.buy_price) * (meta.qty || 1);
+    const pnlPct = ((last.close / meta.buy_price) - 1) * 100;
+    const sign = pnlAmt >= 0 ? '+' : '';
+    pnlEl.textContent = `${sign}₹${pnlAmt.toFixed(2)} (${sign}${pnlPct.toFixed(2)}%)`;
+    pnlEl.style.color = pnlAmt >= 0 ? '#10b981' : '#ef4444';
+  }
+
+  const stopEl = document.getElementById('chartKpiStop');
+  if (stopEl) stopEl.textContent = meta.stop_loss ? `₹${meta.stop_loss.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const stopSubEl = document.getElementById('chartKpiStopSub');
+  if (stopSubEl) {
+    stopSubEl.textContent = meta.gtt_order ? 'GTT ACTIVE ON GROWW' : 'PAPER THRESHOLD (-7%)';
+    stopSubEl.style.color = meta.gtt_order ? '#34d399' : '#ef4444';
+  }
+
+  const targetEl = document.getElementById('chartKpiTarget');
+  if (targetEl) targetEl.textContent = meta.target ? `₹${meta.target.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '--';
+
+  const investedEl = document.getElementById('chartKpiInvested');
+  if (investedEl && meta.buy_price) {
+    investedEl.textContent = `₹${(meta.buy_price * (meta.qty || 1)).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+  }
+  const investedSubEl = document.getElementById('chartKpiInvestedSub');
+  if (investedSubEl) {
+    investedSubEl.textContent = isLive ? 'Groww Demat Holding' : 'Allocated Sandbox';
+  }
+
+  const auditDetail = document.getElementById('chartAuditDetail');
+  if (auditDetail) {
+    if (meta.gtt_order) {
+      auditDetail.innerHTML = `Live Exchange GTT Stop Order <span class="mono" style="color:#fff;font-weight:700">#${meta.gtt_order}</span> active on Groww at ₹${meta.stop_loss}. Sell triggered automatically if price touches floor.`;
+    } else {
+      auditDetail.textContent = `Paper sandbox simulation asset monitored by autonomous quantitative engine for momentum and stop levels.`;
+    }
+  }
+
+  drawHoldingsSvg();
+}
+
+function drawHoldingsSvg() {
+  const stock = holdingsChartsData[currentChartSymbol];
+  if (!stock) return;
+  const history = stock.history || [];
+  const meta = stock.meta || {};
+  const svg = document.getElementById('holdingsSvgChart');
+  if (!svg || !history.length) return;
+  svg.innerHTML = '';
+
+  const W = 960;
+  const H = 500;
+  const padLeft = 65;
+  const padRight = 35;
+  const padTop = 35;
+  const padBottom = 70;
+  const volumeHeight = 65;
+
+  const plotW = W - padLeft - padRight;
+  const pricePlotH = H - padTop - padBottom - volumeHeight - 15;
+  const volumeTop = H - padBottom - volumeHeight;
+
+  const highs = history.map(h => h.high);
+  const lows = history.map(h => h.low);
+  if (meta.target) highs.push(meta.target * 1.02);
+  if (meta.stop_loss) lows.push(meta.stop_loss * 0.98);
+
+  let minP = Math.min(...lows);
+  let maxP = Math.max(...highs);
+  const pRange = maxP - minP || 1;
+  minP -= pRange * 0.04;
+  maxP += pRange * 0.04;
+
+  const maxVol = Math.max(...history.map(h => h.volume)) || 1;
+  const n = history.length;
+  const stepX = plotW / (n - 1 || 1);
+  const candleW = Math.max(3, Math.min(10, (plotW / n) * 0.65));
+
+  const getY = p => padTop + pricePlotH - ((p - minP) / (maxP - minP)) * pricePlotH;
+  const getX = i => padLeft + i * stepX;
+  const getVolY = v => volumeTop + volumeHeight - (v / maxVol) * volumeHeight;
+
+  const numSteps = 6;
+  let gridSvg = '';
+  for (let s = 0; s <= numSteps; s++) {
+    const pVal = minP + (s / numSteps) * (maxP - minP);
+    const yPos = getY(pVal);
+    gridSvg += `<line x1="${padLeft}" y1="${yPos}" x2="${W - padRight}" y2="${yPos}" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,3" />`;
+    gridSvg += `<text x="${padLeft - 8}" y="${yPos + 4}" fill="#64748b" font-size="10" text-anchor="end" font-family="'JetBrains Mono', monospace">₹${pVal.toFixed(1)}</text>`;
+  }
+
+  for (let i = 0; i < n; i += Math.ceil(n / 6)) {
+    const xPos = getX(i);
+    const dStr = history[i].date.slice(5);
+    gridSvg += `<line x1="${xPos}" y1="${padTop}" x2="${xPos}" y2="${volumeTop + volumeHeight}" stroke="#1e293b" stroke-width="1" stroke-dasharray="2,4" opacity="0.5" />`;
+    gridSvg += `<text x="${xPos}" y="${H - padBottom + 18}" fill="#64748b" font-size="10" text-anchor="middle" font-family="'JetBrains Mono', monospace">${dStr}</text>`;
+  }
+
+  gridSvg += `<line x1="${padLeft}" y1="${volumeTop - 5}" x2="${W - padRight}" y2="${volumeTop - 5}" stroke="#334155" stroke-width="1" />`;
+  gridSvg += `<text x="${padLeft}" y="${volumeTop - 8}" fill="#64748b" font-size="9" font-family="'JetBrains Mono', monospace">VOLUME</text>`;
+
+  let volSvg = '';
+  for (let i = 0; i < n; i++) {
+    const h = history[i];
+    const x = getX(i) - candleW / 2;
+    const y = getVolY(h.volume);
+    const barH = volumeTop + volumeHeight - y;
+    const color = h.close >= h.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)';
+    volSvg += `<rect x="${x}" y="${y}" width="${candleW}" height="${barH}" fill="${color}" />`;
+  }
+
+  let levelsSvg = '';
+  if (meta.target) {
+    const tY = getY(meta.target);
+    levelsSvg += `
+      <g>
+        <line x1="${padLeft}" y1="${tY}" x2="${W - padRight}" y2="${tY}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5,4" />
+        <rect x="${W - padRight - 110}" y="${tY - 11}" width="110" height="20" rx="4" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1" />
+        <text x="${W - padRight - 55}" y="${tY + 3}" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">TARGET: ₹${meta.target.toFixed(0)}</text>
+      </g>
+    `;
+  }
+  if (meta.stop_loss) {
+    const slY = getY(meta.stop_loss);
+    levelsSvg += `
+      <g>
+        <line x1="${padLeft}" y1="${slY}" x2="${W - padRight}" y2="${slY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,4" />
+        <rect x="${W - padRight - 110}" y="${slY - 11}" width="110" height="20" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="#ef4444" stroke-width="1" />
+        <text x="${W - padRight - 55}" y="${slY + 3}" fill="#f87171" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">STOP: ₹${meta.stop_loss.toFixed(0)}</text>
+      </g>
+    `;
+  }
+
+  const lastClose = history[n - 1].close;
+  const lastY = getY(lastClose);
+  levelsSvg += `
+    <g>
+      <line x1="${padLeft}" y1="${lastY}" x2="${W - padRight}" y2="${lastY}" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,3" />
+      <rect x="${padLeft}" y="${lastY - 10}" width="80" height="18" rx="3" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="1" />
+      <text x="${padLeft + 40}" y="${lastY + 3}" fill="#38bdf8" font-size="9.5" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">₹${lastClose.toFixed(1)}</text>
+    </g>
+  `;
+
+  let priceSvg = '';
+  if (chartDisplayType === 'candle') {
+    for (let i = 0; i < n; i++) {
+      const h = history[i];
+      const x = getX(i);
+      const yOpen = getY(h.open);
+      const yClose = getY(h.close);
+      const yHigh = getY(h.high);
+      const yLow = getY(h.low);
+      const isUp = h.close >= h.open;
+      const strokeColor = isUp ? '#10b981' : '#ef4444';
+      const topBody = Math.min(yOpen, yClose);
+      const bodyH = Math.max(2, Math.abs(yClose - yOpen));
+
+      priceSvg += `<line x1="${x}" y1="${yHigh}" x2="${x}" y2="${yLow}" stroke="${strokeColor}" stroke-width="1.2" />`;
+      priceSvg += `<rect x="${x - candleW / 2}" y="${topBody}" width="${candleW}" height="${bodyH}" fill="${strokeColor}" rx="1" />`;
+    }
+  } else {
+    let pathD = `M ${getX(0)} ${getY(history[0].close)}`;
+    for (let i = 1; i < n; i++) {
+      pathD += ` L ${getX(i)} ${getY(history[i].close)}`;
+    }
+    const areaD = pathD + ` L ${getX(n - 1)} ${padTop + pricePlotH} L ${getX(0)} ${padTop + pricePlotH} Z`;
+    priceSvg += `<path d="${areaD}" fill="url(#chartAreaGrad)" opacity="0.4" />`;
+    priceSvg += `<path d="${pathD}" fill="none" stroke="#38bdf8" stroke-width="2.2" />`;
+  }
+
+  let smaSvg = '';
+  if (showChartSma) {
+    let pSma20 = '';
+    let pSma50 = '';
+    for (let i = 0; i < n; i++) {
+      if (history[i].sma20) {
+        const cmd = pSma20 === '' ? 'M' : 'L';
+        pSma20 += ` ${cmd} ${getX(i)} ${getY(history[i].sma20)}`;
+      }
+      if (history[i].sma50) {
+        const cmd = pSma50 === '' ? 'M' : 'L';
+        pSma50 += ` ${cmd} ${getX(i)} ${getY(history[i].sma50)}`;
+      }
+    }
+    if (pSma20) smaSvg += `<path d="${pSma20}" fill="none" stroke="#fbbf24" stroke-width="1.4" opacity="0.85" />`;
+    if (pSma50) smaSvg += `<path d="${pSma50}" fill="none" stroke="#c084fc" stroke-width="1.4" opacity="0.85" />`;
+  }
+
+  let buySvg = '';
+  const buyIdx = history.findIndex(h => h.date === meta.buy_date);
+  if (buyIdx !== -1) {
+    const buyX = getX(buyIdx);
+    const buyY = getY(meta.buy_price);
+    const candleTop = getY(history[buyIdx].high);
+
+    buySvg = `
+      <line x1="${buyX}" y1="${padTop}" x2="${buyX}" y2="${volumeTop + volumeHeight}" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.8" />
+      <circle cx="${buyX}" cy="${buyY}" r="14" fill="rgba(16, 185, 129, 0.2)" />
+      <circle cx="${buyX}" cy="${buyY}" r="8" fill="rgba(16, 185, 129, 0.4)" />
+      <circle cx="${buyX}" cy="${buyY}" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+      <g transform="translate(${buyX}, ${Math.max(padTop + 10, candleTop - 45)})">
+        <polygon points="0,35 -6,27 6,27" fill="#059669" />
+        <rect x="-75" y="0" width="150" height="28" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="1.5" filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.6))" />
+        <text x="0" y="14" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="'JetBrains Mono', monospace">
+          BOUGHT @ ₹${meta.buy_price.toLocaleString('en-IN', {minimumFractionDigits: 1})}
+        </text>
+        <text x="0" y="24" fill="#6ee7b7" font-size="8" font-weight="bold" text-anchor="middle" font-family="sans-serif">
+          ${meta.buy_date} · ${meta.qty || 1} SHARES
+        </text>
+      </g>
+    `;
+  }
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="chartAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+      </linearGradient>
+    </defs>
+    ${gridSvg}
+    ${volSvg}
+    ${levelsSvg}
+    ${priceSvg}
+    ${smaSvg}
+    ${buySvg}
+  `;
+
+  const container = svg.parentElement;
+  const tooltip = document.getElementById('chartTooltip');
+  if (!container || !tooltip) return;
+
+  container.onmousemove = function(e) {
+    const rect = svg.getBoundingClientRect();
+    const scaleX = 960 / rect.width;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+
+    if (mouseX < padLeft || mouseX > W - padRight) {
+      tooltip.style.display = 'none';
+      return;
+    }
+
+    const idx = Math.min(n - 1, Math.max(0, Math.round((mouseX - padLeft) / stepX)));
+    const item = history[idx];
+    if (!item) return;
+
+    const diffFromBuy = meta.buy_price ? ((item.close / meta.buy_price - 1) * 100).toFixed(2) : '0.00';
+    const sign = diffFromBuy >= 0 ? '+' : '';
+    const diffColor = diffFromBuy >= 0 ? '#34d399' : '#f87171';
+    const isBuyDay = item.date === meta.buy_date;
+
+    tooltip.style.display = 'block';
+    tooltip.style.left = `${Math.min(rect.width - 200, Math.max(10, e.clientX - rect.left - 90))}px`;
+    tooltip.style.top = `15px`;
+
+    tooltip.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;margin-bottom:6px;border-bottom:1px solid #334155">
+        <span class="mono" style="font-weight:700;color:#fff">${item.date}</span>
+        ${isBuyDay ? '<span class="pill pill-live" style="font-size:9px;padding:1px 5px">BUY POINT</span>' : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-family:'JetBrains Mono',monospace;font-size:11px">
+        <div><span style="color:#94a3b8">Open:</span> ₹${item.open.toFixed(1)}</div>
+        <div><span style="color:#94a3b8">Close:</span> <strong style="color:#fff">₹${item.close.toFixed(1)}</strong></div>
+        <div><span style="color:#94a3b8">High:</span> ₹${item.high.toFixed(1)}</div>
+        <div><span style="color:#94a3b8">Low:</span> ₹${item.low.toFixed(1)}</div>
+        <div style="grid-column:span 2;color:#94a3b8;padding-top:2px">Vol: ${(item.volume / 1000).toFixed(1)}k shares</div>
+        <div style="grid-column:span 2;padding-top:4px;border-top:1px solid #1e293b;font-size:10.5px">
+          vs Buy: <span style="color:${diffColor};font-weight:700">${sign}${diffFromBuy}%</span>
+        </div>
+      </div>
+    `;
+  };
+
+  container.onmouseleave = function() {
+    tooltip.style.display = 'none';
+  };
 }
 
 function toggleCard(cardId, e) {

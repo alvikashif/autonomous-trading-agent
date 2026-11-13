@@ -265,3 +265,26 @@ def test_build_summary_live_mode_excludes_dummy_paper_trades(tmp_path):
     # Dummy paper trades must NOT leak into live trades list
     assert all(t.get("symbol") not in ("DUMMY1", "DUMMY2") for t in summary["trades"])
 
+
+def test_build_summary_includes_holdings_charts(tmp_path):
+    paper = tmp_path / "paper.json"
+    paper.write_text(json.dumps({"cash": 1000.0, "positions": {}, "trades": []}))
+    mon = tmp_path / "mon.json"
+    mon.write_text(json.dumps({}))
+    screen = tmp_path / "screen.csv"
+    screen.write_text("symbol,compliant\n")
+    prices = tmp_path / "prices.csv"
+    prices.write_text("date\n")
+
+    summary = build_summary(str(paper), str(mon), str(screen), str(prices), 3)
+    assert "charts" in summary
+    assert isinstance(summary["charts"], dict)
+    assert "SHYAMMETL" in summary["charts"]
+    shyam = summary["charts"]["SHYAMMETL"]
+    assert "meta" in shyam and "history" in shyam
+    assert shyam["meta"]["buy_price"] == 1320.50
+    assert shyam["meta"]["buy_date"] == "2026-11-09"
+    assert shyam["meta"]["qty"] == 3
+    assert len(shyam["history"]) > 30
+
+
