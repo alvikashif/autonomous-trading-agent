@@ -205,6 +205,42 @@ def test_groww_broker_auto_reauth_on_401(tmp_path, monkeypatch):
     assert call_count["auth"] >= 1
 
 
+def test_groww_positions_t1_no_double_counting(tmp_path, monkeypatch):
+    """Ensure that holdings already containing t1_quantity are not double-counted with day positions."""
+    cache_path = tmp_path / "token.json"
+
+    class FakeClientWithT1:
+        def __init__(self, token):
+            self.token = token
+
+        def get_holdings_for_user(self):
+            return {
+                "holdings": [
+                    {"trading_symbol": "ACUTAAS", "quantity": 1.0, "t1_quantity": 1.0, "demat_free_quantity": 0.0},
+                    {"trading_symbol": "SHYAMMETL", "quantity": 3.0, "t1_quantity": 0.0, "demat_free_quantity": 3.0},
+                ]
+            }
+
+        def get_positions_for_user(self, segment="CASH"):
+            return {
+                "positions": [
+                    {"trading_symbol": "ACUTAAS", "quantity": 1, "credit_quantity": 1, "debit_quantity": 0},
+                ]
+            }
+
+    broker = GrowwBroker(
+        api_key="test_api_key",
+        totp_secret="test_totp_secret",
+        token_cache_path=cache_path,
+    )
+    monkeypatch.setattr(broker, "_init_client", lambda token: setattr(broker, "_client", FakeClientWithT1(token)))
+    broker._client = FakeClientWithT1("mock_token")
+
+    pos = broker.positions()
+    # Must NOT double count ACUTAAS to 2
+    assert pos == {"ACUTAAS": 1, "SHYAMMETL": 3}
+
+
 def test_kill_switch_lifecycle(tmp_path):
     ks_path = tmp_path / "kill_switch.json"
     assert is_kill_switch_active(ks_path) is False

@@ -336,6 +336,17 @@ def build_summary(paper_path: str, monitor_path: str, screen_path: str, prices_c
                     pass
         display_trades = live_trades
         avg = average_costs(display_trades)
+        # In live mode, derive active held positions strictly from live executed trades
+        live_held_qty: dict[str, int] = {}
+        for t in display_trades:
+            s, q = t.get("symbol", "").upper(), int(t.get("qty", 0))
+            if not s or q <= 0:
+                continue
+            if t.get("side") == "BUY":
+                live_held_qty[s] = live_held_qty.get(s, 0) + q
+            elif t.get("side") == "SELL":
+                live_held_qty[s] = max(0, live_held_qty.get(s, 0) - q)
+        positions = {s: q for s, q in live_held_qty.items() if q > 0}
     else:
         display_trades = trades[-25:][::-1]
         avg = average_costs(trades)

@@ -194,7 +194,7 @@ class GrowwBroker(Broker):
 
     def positions(self) -> dict[str, int]:
         """Fetch current equity holdings quantity from Demat account (settled holdings + today's day delivery positions)."""
-        # 1. Settled Demat holdings (T+1)
+        # 1. Demat holdings (includes settled + T1 quantities already ingested by Groww)
         resp = self._execute_with_retry(self._ensure_client().get_holdings_for_user)
         holdings = []
         if isinstance(resp, dict):
@@ -203,13 +203,16 @@ class GrowwBroker(Broker):
             elif "holdings" in resp:
                 holdings = resp["holdings"]
         pos: dict[str, int] = {}
+        holdings_t1: dict[str, float] = {}
         for h in holdings:
-            sym = h.get("trading_symbol") or h.get("tradingSymbol") or h.get("symbol") or ""
+            sym = (h.get("trading_symbol") or h.get("tradingSymbol") or h.get("symbol") or "").upper()
             qty = int(float(h.get("quantity") or h.get("total_quantity") or h.get("totalQuantity") or h.get("holding_quantity") or 0))
+            t1 = float(h.get("t1_quantity", 0) or 0)
             if sym and qty > 0:
-                pos[sym.upper()] = qty
+                pos[sym] = qty
+                holdings_t1[sym] = t1
 
-        # 2. Today's day delivery positions (T+0 CNC buys not yet settled into Demat)
+        # 2. Today's day delivery positions (T+0 CNC buys not yet reflected in Demat holdings)
         try:
             pos_resp = self._execute_with_retry(self._ensure_client().get_positions_for_user, segment="CASH")
             day_positions = []
@@ -219,10 +222,17 @@ class GrowwBroker(Broker):
                 elif "payload" in pos_resp and isinstance(pos_resp["payload"], dict):
                     day_positions = pos_resp["payload"].get("positions", [])
             for p in day_positions:
-                sym = p.get("trading_symbol") or p.get("tradingSymbol") or p.get("symbol") or ""
-                qty = int(float(p.get("quantity") or p.get("net_quantity") or (float(p.get("credit_quantity", 0)) - float(p.get("debit_quantity", 0)))))
-                if sym and qty > 0:
-                    pos[sym.upper()] = pos.get(sym.upper(), 0) + qty
+                sym = (p.get("trading_symbol") or p.get("tradingSymbol") or p.get("symbol") or "").upper()
+                day_qty = int(float(p.get("quantity") or p.get("net_quantity") or (float(p.get("credit_quantity", 0)) - float(p.get("debit_quantity", 0)))))
+                if not sym or day_qty <= 0:
+                    continue
+                # If symbol is NOT in holdings yet, Groww has not ingested the day's buy -> add it
+                if sym not in pos:
+                    pos[sym] = day_qty
+                # If symbol is in holdings but t1_quantity is 0, Groww has not merged the day's buy yet
+                elif holdings_t1.get(sym, 0) == 0:
+                    pos[sym] += day_qty
+                # Otherwise, Groww holdings["quantity"] ALREADY contains t1_quantity; do not double-count!
         except Exception as pe:
             logger.debug(f"Could not fetch day positions: {pe}")
 
