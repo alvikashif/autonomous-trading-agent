@@ -3,8 +3,8 @@
 Supersedes VPS_PLAN.md. Nothing below has been run yet except two read-only SSH checks.
 
 ## What I found (read-only)
-- SSH works over the Tailscale IP: `ssh opc@100.127.177.5` (or `captain-new.goose-dragon.ts.net`).
-  From Git Bash, the bare name `captain-new` resolves to the public IP, where port 22 is closed. Use the IP or the full ts.net name.
+- SSH works over Tailscale IP: `ssh <user>@<tailscale-ip>` (or `<hostname>.ts.net`).
+  From Git Bash, the bare name resolves to the public IP, where port 22 is closed. Use the IP or the full ts.net name.
 - Host: OCI, **aarch64 (ARM)**, Docker Swarm 29.x, Tailscale running, ~4.7 GB RAM free, ~25 GB disk free.
   The image must be arm64. `python:3.12-slim` is multi-arch and pandas/numpy/yfinance have arm64 wheels, so this is fine.
 - About 19 other services run there. This plan adds two or three apps and touches none of them.
@@ -34,7 +34,7 @@ Seed from the laptop (over Tailscale): `config` stays in the image, `data/*.csv`
 Backup: a nightly host cron copying `paper_state.json` to a dated file. Tell me if the host already has a backup routine to join.
 
 ## 3. Dashboard reachable only through Tailscale
-You said the hostname gets an A record pointing at the Tailscale IP `100.127.177.5`. That works, with these settings:
+You said the hostname gets an A record pointing at the Tailscale IP. That works, with these settings:
 1. CapRover app `agent-dashboard`: enable HTTP, container port **8765**, custom domain = your hostname. **Do not enable HTTPS** (Let's Encrypt cannot validate an address the internet cannot reach). Traffic inside the tailnet is already WireGuard-encrypted; the browser only shows "not secure".
 2. The app also gets CapRover's default `agent-dashboard.<root-domain>` name, and that wildcard likely points at the public IP. So add this under the app's Nginx config so only tailnet addresses get through:
    ```nginx

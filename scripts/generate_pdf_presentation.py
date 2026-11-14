@@ -321,7 +321,7 @@ def build_pdf(out_path: str):
     draw_card(c, 0.8 * inch, y_pos, w2, h2,
               "Physical Emergency Kill Switch", "Universal Veto Authority", [
                   ("Instant Circuit Breaker", "Engaging Kill Switch instantly blocks all buy and sell orders across all containers."),
-                  ("Single-Click UI", "Prominent emergency halt button on the live OLED dashboard at trading.lifemint.net."),
+                  ("Single-Click UI", "Prominent emergency halt button on the live OLED dashboard at trading.yourdomain.com."),
                   ("Persistent State", "Recorded in data/kill_switch.json with ISO-8601 audit timestamp and trigger reason.")
               ], badge="KILL SWITCH")
 
@@ -332,7 +332,7 @@ def build_pdf(out_path: str):
                   ("HMAC-SHA256 Auth", "Tamper-evident 30-day session cookies with timing-safe comparison on custom username.")
               ], badge="CAPROVER :14")
 
-    draw_footer(c, 5, 5, ["TRADING.LIFEMINT.NET", "HMAC AUTHENTICATED", "AUTOMATIC FAILOVER ACTIVE"])
+    draw_footer(c, 5, 5, ["TRADING.YOURDOMAIN.COM", "HMAC AUTHENTICATED", "AUTOMATIC FAILOVER ACTIVE"])
     c.showPage()
 
     c.save()

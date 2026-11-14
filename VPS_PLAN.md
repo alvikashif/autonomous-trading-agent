@@ -41,7 +41,7 @@ Nothing here is installed or run for you. Every command is for you to run on the
 ```bash
 sudo apt install python3-venv python3-pip rsync
 # from the laptop (PowerShell, adjust host):
-#   scp -r D:\Kashif\trading agent@<vps-tailscale-name>:~/trading
+#   scp -r ./trading agent@<vps-tailscale-name>:~/trading
 cd ~/trading
 python3 -m venv .venv
 .venv/bin/pip install -e .

@@ -203,14 +203,14 @@ class GrowwBroker(Broker):
             elif "holdings" in resp:
                 holdings = resp["holdings"]
         pos: dict[str, int] = {}
-        holdings_t1: dict[str, float] = {}
+        demat_free_pos: dict[str, int] = {}
         for h in holdings:
             sym = (h.get("trading_symbol") or h.get("tradingSymbol") or h.get("symbol") or "").upper()
             qty = int(float(h.get("quantity") or h.get("total_quantity") or h.get("totalQuantity") or h.get("holding_quantity") or 0))
-            t1 = float(h.get("t1_quantity", 0) or 0)
+            demat_free = int(float(h.get("demat_free_quantity") or h.get("dematFreeQuantity") or 0))
             if sym and qty > 0:
                 pos[sym] = qty
-                holdings_t1[sym] = t1
+                demat_free_pos[sym] = demat_free
 
         # 2. Today's day delivery positions (T+0 CNC buys not yet reflected in Demat holdings)
         try:
@@ -229,10 +229,12 @@ class GrowwBroker(Broker):
                 # If symbol is NOT in holdings yet, Groww has not ingested the day's buy -> add it
                 if sym not in pos:
                     pos[sym] = day_qty
-                # If symbol is in holdings but t1_quantity is 0, Groww has not merged the day's buy yet
-                elif holdings_t1.get(sym, 0) == 0:
-                    pos[sym] += day_qty
-                # Otherwise, Groww holdings["quantity"] ALREADY contains t1_quantity; do not double-count!
+                else:
+                    # Groww holding quantity may already include the day's buy (quantity=1, demat_free=0, day_qty=1)
+                    # or it may only reflect settled shares (quantity=3, demat_free=3, day_qty=2 -> total=5).
+                    # Use max(holding_qty, demat_free + day_qty) to ensure no double-counting.
+                    demat_free = demat_free_pos.get(sym, 0)
+                    pos[sym] = max(pos[sym], demat_free + day_qty)
         except Exception as pe:
             logger.debug(f"Could not fetch day positions: {pe}")
 

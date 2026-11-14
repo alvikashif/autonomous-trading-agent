@@ -426,7 +426,7 @@ def create_deck(output_pptx_path: str):
     for b in [
         "Docker Swarm Cluster: Running live on CapRover Oracle Host (Image :14).",
         "Zero Environment Duplication: Clean separation of concerns between dashboard, jobs & monitor.",
-        "HMAC-SHA256 Auth: 30-day persistent session cookies with timing-safe comparison on trading.lifemint.net."
+        "HMAC-SHA256 Auth: 30-day persistent session cookies with timing-safe comparison on trading.yourdomain.com."
     ]:
         p = tf.add_paragraph()
         p.text = "• " + b

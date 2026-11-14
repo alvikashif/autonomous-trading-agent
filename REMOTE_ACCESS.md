@@ -10,7 +10,7 @@ All of this is PAPER trading. The dashboard is read-only and the monitor never b
 - Exchange holidays are not known to the monitor; quotes simply stay unchanged.
 
 ## 1. Local (laptop)
-Two terminals in `D:\Kashif\trading`:
+Two terminals in project directory:
 ```
 .venv\Scripts\agent monitor          # add --alert-only to never sell
 .venv\Scripts\agent dashboard        # http://127.0.0.1:8765
@@ -18,11 +18,11 @@ Two terminals in `D:\Kashif\trading`:
 A laptop sleeps and drops WiFi. For all-day running: keep it plugged in and set sleep to "Never"
 when plugged in (Windows Settings > System > Power). Or use a VPS (section 3).
 
-Start automatically at logon (run once in PowerShell, adjust nothing else):
+Start automatically at logon (run once in PowerShell, adjust path as needed):
 ```
-$py = "D:\Kashif\trading\.venv\Scripts\python.exe"
-$a1 = New-ScheduledTaskAction -Execute $py -Argument "-m agent.cli monitor" -WorkingDirectory "D:\Kashif\trading"
-$a2 = New-ScheduledTaskAction -Execute $py -Argument "-m agent.cli dashboard" -WorkingDirectory "D:\Kashif\trading"
+$py = "$PWD\.venv\Scripts\python.exe"
+$a1 = New-ScheduledTaskAction -Execute $py -Argument "-m agent.cli monitor" -WorkingDirectory "$PWD"
+$a2 = New-ScheduledTaskAction -Execute $py -Argument "-m agent.cli dashboard" -WorkingDirectory "$PWD"
 $t  = New-ScheduledTaskTrigger -AtLogOn
 Register-ScheduledTask -TaskName "AgentMonitor"   -Action $a1 -Trigger $t
 Register-ScheduledTask -TaskName "AgentDashboard" -Action $a2 -Trigger $t
